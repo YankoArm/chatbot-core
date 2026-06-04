@@ -1,0 +1,3 @@
+ACTIVE_TEMPLATE = "booking"
+DEFAULT_LANGUAGE = "es"
+SUPPORTED_LANGUAGES = ["es", "en"]
