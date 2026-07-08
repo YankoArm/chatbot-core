@@ -23,14 +23,14 @@ class BaseCapability(ABC):
         return None
 
     @abstractmethod
-    def can_handle(self, context: dict[str, Any], message: str) -> bool:
+    def can_handle(self, context: Any, message: str) -> bool:
         """
         Return True if this Capability can handle the incoming message.
         """
         pass
 
     @abstractmethod
-    def handle(self, context: dict[str, Any], message: str) -> Any:
+    def handle(self, context: Any, message: str) -> Any:
         """
         Process the incoming message and return a response.
         """

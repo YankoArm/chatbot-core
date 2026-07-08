@@ -14,7 +14,7 @@ class BookingCapability(BaseCapability):
 
         context["flows"].append("booking_flow")
 
-    def can_handle(self, context: dict[str, Any], message: str) -> bool:
+    def can_handle(self, context: Any, message: str) -> bool:
         text = message.lower().strip()
 
         keywords = (
@@ -27,7 +27,7 @@ class BookingCapability(BaseCapability):
 
         return any(keyword in text for keyword in keywords)
 
-    def handle(self, context: dict[str, Any], message: str) -> Response:
+    def handle(self, context: Any, message: str) -> Response:
         return Response(
             text="Booking Capability handled the request.",
             metadata={
