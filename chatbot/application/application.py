@@ -3,49 +3,38 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from chatbot.conversation import ConversationStore
+from chatbot.responses import Response
+
 
 @dataclass(slots=True)
 class FlowForgeApplication:
     """
     Runtime representation of a configured FlowForge Instance.
-
-    The Application is the main entry point of the framework.
-    It coordinates the core components required to process
-    conversations but contains no business-specific logic.
-
-    Responsibilities:
-        - Expose the public FlowForge API.
-        - Own the runtime components.
-        - Delegate conversation processing.
-
-    It never implements business behaviour directly.
     """
 
     instance: Any
     orchestrator: Any
     capability_manager: Any
+    conversation_store: ConversationStore
     connector_manager: Any | None = None
 
-    def chat(self, session_id: str, message: str):
-        """
-        Process an incoming user message.
-        """
-        raise NotImplementedError
+    def chat(self, session_id: str, message: str) -> Response:
+        context = self.conversation_store.get(session_id)
+        return self.orchestrator.process(context, message)
 
-    def reset_session(self, session_id: str):
-        """
-        Reset a conversation session.
-        """
-        raise NotImplementedError
+    def reset_session(self, session_id: str) -> None:
+        self.conversation_store.reset(session_id)
 
-    def reload(self):
-        """
-        Reload the current instance configuration.
-        """
+    def reload(self) -> None:
         raise NotImplementedError
 
     def info(self) -> dict:
-        """
-        Return runtime information about the application.
-        """
-        raise NotImplementedError
+        return {
+            "instance": self.instance,
+            "capabilities": [
+                capability.name
+                for capability in self.capability_manager.all()
+            ],
+            "active_sessions": self.conversation_store.count(),
+        }
