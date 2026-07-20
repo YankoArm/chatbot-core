@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
-
+from chatbot.activation import ActivationState
 
 @dataclass(slots=True)
 class ConversationContext:
@@ -21,6 +21,9 @@ class ConversationContext:
     variables: dict[str, Any] = field(default_factory=dict)
     pending_actions: list[dict[str, Any]] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+    activation_state: ActivationState = field(
+        default_factory=ActivationState
+    )
 
     def set_active_capability(self, capability_name: str) -> None:
         if self.active_capability:
