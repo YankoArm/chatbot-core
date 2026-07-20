@@ -5,6 +5,7 @@ from chatbot.activation.manager import ActivationManager
 from chatbot.activation.policy import ActivationPolicy
 from chatbot.activation.result import ActivationResult
 from chatbot.activation.state import ActivationState
+from chatbot.activation.decision import ActivationDecision
 
 __all__ = [
     "ActivationAction",
@@ -14,4 +15,5 @@ __all__ = [
     "ActivationState",
     "AlwaysActivePolicy",
     "ExactPhrasePolicy",
+    "ActivationDecision",
 ]

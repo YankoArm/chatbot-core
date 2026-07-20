@@ -7,6 +7,8 @@ from chatbot.activation.action import ActivationAction
 from chatbot.activation.policy import ActivationPolicy
 from chatbot.activation.result import ActivationResult
 from chatbot.activation.state import ActivationState
+from chatbot.responses import Response
+from chatbot.activation.decision import ActivationDecision
 
 
 Clock = Callable[[], datetime]
@@ -109,3 +111,25 @@ class ActivationManager:
     @staticmethod
     def _utc_now() -> datetime:
         return datetime.now(timezone.utc)
+    
+    def handle(
+        self,
+        message: str,
+        state: ActivationState,
+    ) -> ActivationDecision:
+        result = self.evaluate(message, state)
+
+        if result.action in {
+            ActivationAction.ACTIVATE,
+            ActivationAction.CONTINUE,
+        }:
+            return ActivationDecision(
+                continue_processing=True,
+            )
+
+        return ActivationDecision(
+            continue_processing=False,
+            response=Response(
+                text=result.message or "",
+            ),
+        )
