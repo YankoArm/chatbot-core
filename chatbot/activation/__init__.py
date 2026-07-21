@@ -6,6 +6,8 @@ from chatbot.activation.policy import ActivationPolicy
 from chatbot.activation.result import ActivationResult
 from chatbot.activation.state import ActivationState
 from chatbot.activation.decision import ActivationDecision
+from chatbot.activation.config import ActivationConfig
+from chatbot.activation.factory import ActivationFactory
 
 __all__ = [
     "ActivationAction",

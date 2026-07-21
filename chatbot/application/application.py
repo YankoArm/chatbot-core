@@ -5,7 +5,7 @@ from typing import Any
 
 from chatbot.conversation import ConversationStore
 from chatbot.responses import Response
-
+from chatbot.activation import ActivationManager
 
 @dataclass(slots=True)
 class FlowForgeApplication:
@@ -17,11 +17,31 @@ class FlowForgeApplication:
     orchestrator: Any
     capability_manager: Any
     conversation_store: ConversationStore
+    activation_manager: ActivationManager | None = None
     connector_manager: Any | None = None
 
-    def chat(self, session_id: str, message: str) -> Response:
+    def chat(
+        self,
+        session_id: str,
+        message: str,
+    ) -> Response:
+
         context = self.conversation_store.get(session_id)
-        return self.orchestrator.process(context, message)
+
+        if self.activation_manager is not None:
+
+            decision = self.activation_manager.handle(
+                message=message,
+                state=context.activation_state,
+            )
+
+            if not decision.continue_processing:
+                return decision.response
+
+        return self.orchestrator.process(
+            context,
+            message,
+        )
 
     def reset_session(self, session_id: str) -> None:
         self.conversation_store.reset(session_id)

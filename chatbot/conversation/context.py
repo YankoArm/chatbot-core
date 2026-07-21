@@ -50,3 +50,4 @@ class ConversationContext:
         self.variables.clear()
         self.pending_actions.clear()
         self.metadata.clear()
+        self.activation_state.reset()

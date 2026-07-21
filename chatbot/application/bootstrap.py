@@ -5,7 +5,7 @@ from chatbot.capabilities.capability_manager import CapabilityManager
 from chatbot.conversation import ConversationOrchestrator, ConversationStore
 from chatbot.instances import Instance
 from chatbot.registry import CapabilityRegistry
-
+from chatbot.activation import ActivationFactory
 
 class Bootstrap:
     """
@@ -29,6 +29,7 @@ class Bootstrap:
         orchestrator,
         capability_manager,
         conversation_store=None,
+        activation_manager=None,
         connector_manager=None,
     ) -> FlowForgeApplication:
         """
@@ -42,6 +43,7 @@ class Bootstrap:
             orchestrator=orchestrator,
             capability_manager=capability_manager,
             conversation_store=conversation_store or ConversationStore(),
+            activation_manager=activation_manager,
             connector_manager=connector_manager,
         )
 
@@ -66,9 +68,16 @@ class Bootstrap:
             capability_manager
         )
 
+        activation_factory = ActivationFactory()
+
+        activation_manager = activation_factory.create(
+            instance.activation,
+        )
+
         return self.build(
             instance=instance,
             orchestrator=orchestrator,
             capability_manager=capability_manager,
             conversation_store=conversation_store,
+            activation_manager=activation_manager,
         )
