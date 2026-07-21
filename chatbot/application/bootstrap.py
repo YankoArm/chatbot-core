@@ -4,7 +4,10 @@ from chatbot.application.application import FlowForgeApplication
 from chatbot.capabilities.capability_manager import CapabilityManager
 from chatbot.conversation import ConversationOrchestrator, ConversationStore
 from chatbot.instances import Instance
-from chatbot.registry import CapabilityRegistry
+from chatbot.registry import (
+    CapabilityRegistry,
+    DefaultCapabilityRegistry,
+)
 from chatbot.activation import ActivationFactory
 
 class Bootstrap:
@@ -19,8 +22,10 @@ class Bootstrap:
         self,
         capability_registry: CapabilityRegistry | None = None,
     ) -> None:
+
         self._capability_registry = (
-            capability_registry or CapabilityRegistry()
+            capability_registry
+            or DefaultCapabilityRegistry()
         )
 
     def build(
