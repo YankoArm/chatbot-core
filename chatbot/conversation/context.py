@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 from chatbot.activation import ActivationState
+from chatbot.language import Language
 
 @dataclass(slots=True)
 class ConversationContext:
@@ -17,6 +18,7 @@ class ConversationContext:
     user_id: str | None = None
     objective: str | None = None
     active_capability: str | None = None
+    language: Language | None = None
     previous_capabilities: list[str] = field(default_factory=list)
     variables: dict[str, Any] = field(default_factory=dict)
     pending_actions: list[dict[str, Any]] = field(default_factory=list)

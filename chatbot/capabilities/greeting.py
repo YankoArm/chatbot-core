@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from chatbot.responses.response import Response
 from chatbot.capabilities.base_capability import BaseCapability
+from chatbot.language import Language
+from chatbot.responses.response import Response
 
 
 class GreetingCapability(BaseCapability):
@@ -22,7 +23,11 @@ class GreetingCapability(BaseCapability):
         "hey",
     }
 
-    def can_handle(self, context, message: str) -> bool:
+    def can_handle(
+        self,
+        context,
+        message: str,
+    ) -> bool:
         text = message.strip().lower()
 
         return any(
@@ -30,8 +35,17 @@ class GreetingCapability(BaseCapability):
             for greeting in self._GREETINGS
         )
 
-    def handle(self, context, message: str) -> Response:
+    def handle(
+        self,
+        context,
+        message: str,
+    ) -> Response:
         context.set_active_capability(self.name)
+
+        if context.language is Language.EN:
+            return Response(
+                text="Hello! 👋 How can I help you?"
+            )
 
         return Response(
             text="¡Hola! 👋 ¿En qué puedo ayudarte?"

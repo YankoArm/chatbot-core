@@ -1,14 +1,22 @@
 from __future__ import annotations
 
+from chatbot.activation import ActivationFactory
 from chatbot.application.application import FlowForgeApplication
 from chatbot.capabilities.capability_manager import CapabilityManager
-from chatbot.conversation import ConversationOrchestrator, ConversationStore
+from chatbot.conversation import (
+    ConversationOrchestrator,
+    ConversationStore,
+)
 from chatbot.instances import Instance
+from chatbot.language import (
+    BaseLanguageDetector,
+    RuleBasedLanguageDetector,
+)
 from chatbot.registry import (
     CapabilityRegistry,
     DefaultCapabilityRegistry,
 )
-from chatbot.activation import ActivationFactory
+
 
 class Bootstrap:
     """
@@ -21,21 +29,27 @@ class Bootstrap:
     def __init__(
         self,
         capability_registry: CapabilityRegistry | None = None,
+        language_detector: BaseLanguageDetector | None = None,
     ) -> None:
-
         self._capability_registry = (
             capability_registry
             or DefaultCapabilityRegistry()
         )
 
+        self._language_detector = (
+            language_detector
+            or RuleBasedLanguageDetector()
+        )
+
     def build(
         self,
-        instance,
-        orchestrator,
-        capability_manager,
-        conversation_store=None,
+        instance: Instance,
+        orchestrator: ConversationOrchestrator,
+        capability_manager: CapabilityManager,
+        conversation_store: ConversationStore | None = None,
         activation_manager=None,
         connector_manager=None,
+        language_detector: BaseLanguageDetector | None = None,
     ) -> FlowForgeApplication:
         """
         Build an application from already prepared runtime components.
@@ -47,9 +61,16 @@ class Bootstrap:
             instance=instance,
             orchestrator=orchestrator,
             capability_manager=capability_manager,
-            conversation_store=conversation_store or ConversationStore(),
+            conversation_store=(
+                conversation_store
+                or ConversationStore()
+            ),
             activation_manager=activation_manager,
             connector_manager=connector_manager,
+            language_detector=(
+                language_detector
+                or self._language_detector
+            ),
         )
 
     def build_from_instance(

@@ -3,9 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from chatbot.conversation import ConversationStore
-from chatbot.responses import Response
 from chatbot.activation import ActivationManager
+from chatbot.conversation import ConversationStore
+from chatbot.language import (
+    BaseLanguageDetector,
+    Language,
+)
+from chatbot.responses import Response
+
 
 @dataclass(slots=True)
 class FlowForgeApplication:
@@ -19,6 +24,7 @@ class FlowForgeApplication:
     conversation_store: ConversationStore
     activation_manager: ActivationManager | None = None
     connector_manager: Any | None = None
+    language_detector: BaseLanguageDetector | None = None
 
     def chat(
         self,
@@ -27,6 +33,21 @@ class FlowForgeApplication:
     ) -> Response:
 
         context = self.conversation_store.get(session_id)
+
+        if (
+            self.language_detector is not None
+            and context.language is None
+        ):
+            default_language = getattr(
+                self.instance,
+                "default_language",
+                Language.ES.value,
+            )
+
+            context.language = self.language_detector.detect(
+                message,
+                default_language=Language(default_language),
+            )
 
         if self.activation_manager is not None:
 
@@ -43,7 +64,10 @@ class FlowForgeApplication:
             message,
         )
 
-    def reset_session(self, session_id: str) -> None:
+    def reset_session(
+        self,
+        session_id: str,
+    ) -> None:
         self.conversation_store.reset(session_id)
 
     def reload(self) -> None:
