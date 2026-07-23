@@ -79,3 +79,25 @@ def test_booking_capability_completes_booking() -> None:
     assert response.text == (
         "Perfecto, Yanko. He registrado tu solicitud para Mañana a las 17:00."
     )
+
+def test_booking_capability_does_not_advance_with_invalid_phone():
+    capability = BookingCapability()
+    context = ConversationContext(session_id="user_1")
+
+    context.booking = BookingState(
+        name="Yanko",
+    )
+    context.set_active_capability("booking")
+
+    response = capability.handle(
+        context=context,
+        message="abc",
+    )
+
+    assert context.booking.phone is None
+    assert context.booking.next_step is BookingStep.PHONE
+
+    assert response.text == (
+        "El teléfono no parece válido. "
+        "¿Puedes escribirlo de nuevo?"
+    )

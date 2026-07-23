@@ -33,22 +33,13 @@ class BookingCapability(BaseCapability):
         )
 
     def handle(self, context: Any, message: str) -> Response:
-        context.set_active_capability(self.name)
-
         if context.booking is None:
             return self._start_booking(context)
 
-        if context.booking.next_step is BookingStep.NAME:
-            return self._handle_name(context, message)
+        handler = self._get_step_handler(context.booking.next_step)
 
-        if context.booking.next_step is BookingStep.PHONE:
-            return self._handle_phone(context, message)
-
-        if context.booking.next_step is BookingStep.DATE:
-            return self._handle_date(context, message)
-
-        if context.booking.next_step is BookingStep.TIME:
-            return self._handle_time(context, message)
+        if handler is not None:
+            return handler(context, message)
 
         return Response(
             text="La reserva ya está en curso.",
@@ -87,7 +78,22 @@ class BookingCapability(BaseCapability):
         )
 
     def _handle_phone(self, context: Any, message: str) -> Response:
-        context.booking.phone = message.strip()
+        phone = message.strip()
+
+        if not phone.isdigit():
+            return Response(
+                text=(
+                    "El teléfono no parece válido. "
+                    "¿Puedes escribirlo de nuevo?"
+                ),
+                metadata={
+                    "capability": self.name,
+                    "handled": True,
+                    "booking_step": context.booking.next_step.value,
+                },
+            )
+
+        context.booking.phone = phone
 
         return Response(
             text="¿Para qué día quieres la cita?",
@@ -126,3 +132,18 @@ class BookingCapability(BaseCapability):
                 "booking_step": context.booking.next_step.value,
             },
         )
+
+    def _get_step_handler(self, step: BookingStep):
+        if step is BookingStep.NAME:
+            return self._handle_name
+
+        if step is BookingStep.PHONE:
+            return self._handle_phone
+
+        if step is BookingStep.DATE:
+            return self._handle_date
+
+        if step is BookingStep.TIME:
+            return self._handle_time
+
+        return None

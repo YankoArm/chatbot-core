@@ -63,3 +63,18 @@ def test_orchestrator_continues_active_booking_flow():
     )
     assert response.metadata["capability"] == "booking"
     assert response.metadata["handled"] is True
+
+def test_orchestrator_does_not_duplicate_active_capability_history():
+    manager = CapabilityManager()
+    manager.register(BookingCapability())
+
+    orchestrator = ConversationOrchestrator(manager)
+    context = ConversationContext(session_id="test_session")
+
+    orchestrator.process(
+        context=context,
+        message="Quiero reservar una cita",
+    )
+
+    assert context.active_capability == "booking"
+    assert context.previous_capabilities == []
