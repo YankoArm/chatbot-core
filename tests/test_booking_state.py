@@ -1,0 +1,77 @@
+from chatbot.booking import (
+    BookingState,
+    BookingStep,
+)
+
+
+def test_booking_state_starts_empty() -> None:
+    state = BookingState()
+
+    assert state.name is None
+    assert state.phone is None
+    assert state.date is None
+    assert state.time is None
+    assert state.is_complete is False
+
+
+def test_booking_state_starts_at_name_step() -> None:
+    state = BookingState()
+
+    assert state.next_step is BookingStep.NAME
+
+
+def test_booking_state_advances_to_phone_step() -> None:
+    state = BookingState(
+        name="Yanko",
+    )
+
+    assert state.next_step is BookingStep.PHONE
+
+
+def test_booking_state_advances_to_date_step() -> None:
+    state = BookingState(
+        name="Yanko",
+        phone="600123123",
+    )
+
+    assert state.next_step is BookingStep.DATE
+
+
+def test_booking_state_advances_to_time_step() -> None:
+    state = BookingState(
+        name="Yanko",
+        phone="600123123",
+        date="mañana",
+    )
+
+    assert state.next_step is BookingStep.TIME
+
+
+def test_booking_state_is_complete() -> None:
+    state = BookingState(
+        name="Yanko",
+        phone="600123123",
+        date="mañana",
+        time="17:00",
+    )
+
+    assert state.is_complete is True
+    assert state.next_step is BookingStep.COMPLETE
+
+
+def test_booking_state_reset_clears_all_data() -> None:
+    state = BookingState(
+        name="Yanko",
+        phone="600123123",
+        date="mañana",
+        time="17:00",
+    )
+
+    state.reset()
+
+    assert state.name is None
+    assert state.phone is None
+    assert state.date is None
+    assert state.time is None
+    assert state.is_complete is False
+    assert state.next_step is BookingStep.NAME

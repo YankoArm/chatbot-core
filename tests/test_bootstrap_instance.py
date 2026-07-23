@@ -48,7 +48,9 @@ def test_bootstrap_application_can_process_messages():
         message="Quiero reservar una cita",
     )
 
-    assert response.text == "Booking Capability handled the request."
+    assert response.text == (
+        "Perfecto. Vamos a reservar una cita. ¿Cómo te llamas?"
+    )
     assert response.metadata["capability"] == "booking"
 
 

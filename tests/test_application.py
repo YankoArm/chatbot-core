@@ -25,7 +25,9 @@ def test_application_chat_returns_response():
         message="Quiero reservar una cita",
     )
 
-    assert response.text == "Booking Capability handled the request."
+    assert response.text == (
+        "Perfecto. Vamos a reservar una cita. ¿Cómo te llamas?"
+    )
     assert response.metadata["capability"] == "booking"
 
 

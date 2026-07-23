@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from chatbot.activation import ActivationState
 from chatbot.language import Language
+from chatbot.booking import BookingState
 
 @dataclass(slots=True)
 class ConversationContext:
@@ -19,6 +20,7 @@ class ConversationContext:
     objective: str | None = None
     active_capability: str | None = None
     language: Language | None = None
+    booking: BookingState | None = None
     previous_capabilities: list[str] = field(default_factory=list)
     variables: dict[str, Any] = field(default_factory=dict)
     pending_actions: list[dict[str, Any]] = field(default_factory=list)
