@@ -37,3 +37,29 @@ def test_orchestrator_returns_default_response_when_no_capability_matches():
 
     assert response.metadata["handled"] is False
     assert context.active_capability is None
+
+
+def test_orchestrator_continues_active_booking_flow():
+    manager = CapabilityManager()
+    manager.register(BookingCapability())
+
+    orchestrator = ConversationOrchestrator(manager)
+    context = ConversationContext(session_id="test_session")
+
+    orchestrator.process(
+        context=context,
+        message="Quiero reservar una cita",
+    )
+
+    response = orchestrator.process(
+        context=context,
+        message="Yanko",
+    )
+
+    assert context.booking is not None
+    assert context.booking.name == "Yanko"
+    assert response.text == (
+        "Encantado, Yanko. ¿Cuál es tu número de teléfono?"
+    )
+    assert response.metadata["capability"] == "booking"
+    assert response.metadata["handled"] is True

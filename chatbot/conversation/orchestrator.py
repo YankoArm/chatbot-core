@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
-
+from chatbot.booking import BookingStep
 from chatbot.capabilities.capability_manager import CapabilityManager
 from chatbot.conversation.context import ConversationContext
 from chatbot.responses import Response
@@ -18,7 +17,23 @@ class ConversationOrchestrator:
     def __init__(self, capability_manager: CapabilityManager):
         self.capability_manager = capability_manager
 
-    def process(self, context: ConversationContext, message: str) -> Response:
+    def process(
+        self,
+        context: ConversationContext,
+        message: str,
+    ) -> Response:
+        if (
+            context.active_capability == "booking"
+            and context.booking is not None
+            and context.booking.next_step is not BookingStep.COMPLETE
+        ):
+            active_capability = self.capability_manager.get(
+                context.active_capability
+            )
+
+            if active_capability is not None:
+                return active_capability.handle(context, message)
+
         for capability in self.capability_manager.all():
             if capability.can_handle(context, message):
                 context.set_active_capability(capability.name)
