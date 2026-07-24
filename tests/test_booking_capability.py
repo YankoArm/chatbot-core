@@ -2,6 +2,8 @@ from chatbot.booking import BookingState, BookingStep
 from chatbot.capabilities.booking import BookingCapability
 from chatbot.conversation.context import ConversationContext
 
+import pytest
+
 def test_booking_capability_stores_name_and_requests_phone() -> None:
     capability = BookingCapability()
     context = ConversationContext(session_id="user_1")
@@ -139,7 +141,8 @@ def test_booking_capability_does_not_advance_with_invalid_date():
 
     assert response.text == (
         "La fecha no parece válida. "
-        "Escríbela con el formato DD/MM/YYYY."
+        "Escríbela con el formato DD/MM/YYYY "
+        "o pregúntame qué días hay disponibles."
     )
 
 def test_booking_capability_does_not_advance_with_invalid_time():
@@ -164,3 +167,56 @@ def test_booking_capability_does_not_advance_with_invalid_time():
         "La hora no parece válida. "
         "Escríbela con el formato HH:MM."
     )
+
+def test_booking_capability_returns_available_dates_without_advancing() -> None:
+    capability = BookingCapability()
+    context = ConversationContext(session_id="user_1")
+
+    context.booking = BookingState(
+        name="Yanko",
+        phone="600123123",
+    )
+    context.set_active_capability("booking")
+
+    response = capability.handle(
+        context=context,
+        message="¿Qué días hay disponibles?",
+    )
+
+    assert context.booking.date is None
+    assert context.booking.next_step is BookingStep.DATE
+
+    assert "Tengo disponibilidad" in response.text
+    assert "¿Qué día prefieres?" in response.text
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "que dias hay",
+        "¿Qué días hay?",
+        "QUE DIAS HAY DISPONIBLES?",
+        "que dias tienes?",
+        "¿qué fechas tienes?",
+        "hay huecos?",
+    ],
+)
+def test_booking_capability_recognizes_availability_questions(
+    message: str,
+) -> None:
+    capability = BookingCapability()
+    context = ConversationContext(session_id="user_1")
+
+    context.booking = BookingState(
+        name="Yanko",
+        phone="600123123",
+    )
+    context.set_active_capability("booking")
+
+    response = capability.handle(
+        context=context,
+        message=message,
+    )
+
+    assert context.booking.date is None
+    assert context.booking.next_step is BookingStep.DATE
+    assert "Tengo disponibilidad" in response.text

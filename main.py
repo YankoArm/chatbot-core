@@ -1,28 +1,34 @@
-from chatbot.core.engine import ChatEngine
-from chatbot.interfaces.cli import CLIInterface
-from chatbot.bots.flow_bot import FlowBot
-from chatbot.core.bot_config import BotConfig
-from chatbot.templates.registry import TEMPLATE_REGISTRY
-from chatbot.config.settings import (
-    ACTIVE_TEMPLATE,
-    DEFAULT_LANGUAGE,
-    SUPPORTED_LANGUAGES,
-)
+from __future__ import annotations
+
+from chatbot.application.bootstrap import Bootstrap
+from chatbot.channels import ApplicationChannel, CLIChannel
+from chatbot.instances.instance import Instance
 
 
-def main():
-    template = TEMPLATE_REGISTRY[ACTIVE_TEMPLATE]
-
-    config = BotConfig.from_template(
-        template,
-        default_language=DEFAULT_LANGUAGE,
-        supported_languages=SUPPORTED_LANGUAGES,
+def main() -> None:
+    instance = Instance(
+        id="flowforge-cli",
+        name="FlowForge CLI",
+        default_language="es",
+        channels=[
+            "cli",
+        ],
+        capabilities=[
+            "greeting",
+            "booking",
+        ],
     )
 
-    bot = FlowBot(config)
-    engine = ChatEngine(bot)
-    interface = CLIInterface(engine)
-    interface.run()
+    application = Bootstrap().build_from_instance(instance)
+
+    application_channel = ApplicationChannel(application)
+    cli_channel = CLIChannel(application_channel)
+
+    cli_channel.run(
+        session_id="cli-session",
+        sender_id="cli-user",
+        prompt="Tú: ",
+    )
 
 
 if __name__ == "__main__":

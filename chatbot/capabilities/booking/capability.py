@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 from typing import Any
+import re
+import unicodedata
 
 from chatbot.booking import BookingState, BookingStep
 from chatbot.capabilities.base_capability import BaseCapability
@@ -94,15 +98,43 @@ class BookingCapability(BaseCapability):
             "¿Para qué día quieres la cita?",
         )
 
-    def _handle_date(self, context: Any, message: str) -> Response:
+    def _handle_date(
+        self,
+        context: Any,
+        message: str,
+    ) -> Response:
         date = message.strip()
+
+        if self._asks_for_available_dates(date):
+            available_dates = self._get_available_dates()
+
+            if not available_dates:
+                return self._response(
+                    context,
+                    (
+                        "Ahora mismo no tengo fechas disponibles. "
+                        "Inténtalo de nuevo más adelante."
+                    ),
+                )
+
+            formatted_dates = ", ".join(available_dates)
+
+            return self._response(
+                context,
+                (
+                    "Tengo disponibilidad para los siguientes días: "
+                    f"{formatted_dates}. "
+                    "¿Qué día prefieres?"
+                ),
+            )
 
         if not self._is_valid_date(date):
             return self._response(
                 context,
                 (
                     "La fecha no parece válida. "
-                    "Escríbela con el formato DD/MM/YYYY."
+                    "Escríbela con el formato DD/MM/YYYY "
+                    "o pregúntame qué días hay disponibles."
                 ),
             )
 
@@ -112,7 +144,7 @@ class BookingCapability(BaseCapability):
             context,
             "¿A qué hora quieres la cita?",
         )
-
+    
     def _handle_time(self, context: Any, message: str) -> Response:
         time = message.strip()
 
@@ -184,3 +216,104 @@ class BookingCapability(BaseCapability):
             return False
 
         return True
+
+    @staticmethod
+    def _asks_for_available_dates(message: str) -> bool:
+        normalized = unicodedata.normalize(
+            "NFKD",
+            message,
+        )
+
+        normalized = "".join(
+            character
+            for character in normalized
+            if not unicodedata.combining(character)
+        )
+
+        normalized = normalized.casefold()
+
+        normalized = re.sub(
+            r"[^a-z0-9\s]",
+            " ",
+            normalized,
+        )
+
+        normalized = re.sub(
+            r"\s+",
+            " ",
+            normalized,
+        ).strip()
+
+        availability_words = {
+            "disponible",
+            "disponibles",
+            "disponibilidad",
+            "libre",
+            "libres",
+            "hueco",
+            "huecos",
+        }
+
+        date_words = {
+            "dia",
+            "dias",
+            "fecha",
+            "fechas",
+        }
+
+        question_patterns = (
+            "que dias hay",
+            "que fechas hay",
+            "que dias tienes",
+            "que fechas tienes",
+            "que dias quedan",
+            "que fechas quedan",
+            "cuando hay",
+            "cuando tienes",
+            "cuando puedo",
+            "cuando se puede",
+            "dime los dias",
+            "dime las fechas",
+            "mostrar dias",
+            "mostrar fechas",
+            "ver dias",
+            "ver fechas",
+        )
+
+        words = set(normalized.split())
+
+        has_availability_word = bool(
+            words & availability_words
+        )
+
+        has_date_word = bool(
+            words & date_words
+        )
+
+        matches_question_pattern = any(
+            pattern in normalized
+            for pattern in question_patterns
+        )
+
+        return (
+            matches_question_pattern
+            or has_availability_word
+            or (
+                has_date_word
+                and normalized.startswith(
+                    (
+                        "que ",
+                        "cuales ",
+                        "dime ",
+                        "cuando ",
+                    )
+                )
+            )
+        )
+
+    def _get_available_dates(self) -> list[str]:
+        return [
+            "28/07/2026",
+            "29/07/2026",
+            "30/07/2026",
+        ]

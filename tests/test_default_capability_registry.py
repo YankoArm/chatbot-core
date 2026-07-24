@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+from chatbot.capabilities.booking import BookingCapability
 from chatbot.capabilities.greeting import GreetingCapability
 from chatbot.registry import DefaultCapabilityRegistry
 
 
-def test_default_registry_contains_greeting() -> None:
+def test_default_registry_contains_builtin_capabilities() -> None:
     registry = DefaultCapabilityRegistry()
 
-    assert "greeting" in registry.available()
+    available = registry.available()
+
+    assert "greeting" in available
+    assert "booking" in available
 
 
 def test_default_registry_creates_greeting_capability() -> None:
@@ -17,6 +21,15 @@ def test_default_registry_creates_greeting_capability() -> None:
 
     assert isinstance(capability, GreetingCapability)
     assert capability.name == "greeting"
+
+
+def test_default_registry_creates_booking_capability() -> None:
+    registry = DefaultCapabilityRegistry()
+
+    capability = registry.create("booking")
+
+    assert isinstance(capability, BookingCapability)
+    assert capability.name == "booking"
 
 
 def test_registry_creates_new_instance_each_time() -> None:

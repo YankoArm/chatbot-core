@@ -1,18 +1,12 @@
-# chatbot/interfaces/api.py
+from __future__ import annotations
 
 from fastapi import FastAPI
-from pydantic import BaseModel
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 
-from chatbot.core.engine import ChatEngine
-from chatbot.bots.flow_bot import FlowBot
-from chatbot.core.bot_config import BotConfig
-from chatbot.templates.registry import TEMPLATE_REGISTRY
-from chatbot.config.settings import (
-    ACTIVE_TEMPLATE,
-    DEFAULT_LANGUAGE,
-    SUPPORTED_LANGUAGES,
-)
+from chatbot.application.application import FlowForgeApplication
+from chatbot.application.bootstrap import Bootstrap
+from chatbot.instances.instance import Instance
 
 
 class MessageRequest(BaseModel):
@@ -24,54 +18,78 @@ class MessageResponse(BaseModel):
     user_id: str
     response: str
 
+
 class ResetRequest(BaseModel):
     user_id: str
 
 
-def create_engine() -> ChatEngine:
-    template = TEMPLATE_REGISTRY[ACTIVE_TEMPLATE]
+def create_application() -> FlowForgeApplication:
+    """
+    Build the FlowForge application used by the HTTP API.
+    """
 
-    config = BotConfig.from_template(
-        template,
-        default_language=DEFAULT_LANGUAGE,
-        supported_languages=SUPPORTED_LANGUAGES,
+    instance = Instance(
+        id="flowforge-api",
+        name="FlowForge API",
+        default_language="es",
+        channels=[
+            "api",
+            "web",
+        ],
+        capabilities=[
+            "greeting",
+            "booking",
+        ],
     )
 
-    bot = FlowBot(config)
-    return ChatEngine(bot)
+    return Bootstrap().build_from_instance(instance)
 
 
-app = FastAPI(title="Chatbot Core API")
+app = FastAPI(
+    title="FlowForge API",
+    description="HTTP API and web demo for FlowForge.",
+    version="1.0.0",
+)
 
-engine = create_engine()
+application = create_application()
 
 
 @app.get("/")
-def root():
+def root() -> dict[str, object]:
     return {
         "status": "ok",
-        "service": "chatbot_core",
-        "active_template": ACTIVE_TEMPLATE,
+        "service": "flowforge",
+        "instance": application.instance.name,
+        "capabilities": [
+            capability.name
+            for capability in application.capability_manager.all()
+        ],
     }
 
 
-@app.post("/message", response_model=MessageResponse)
-def message_endpoint(request: MessageRequest):
-    response = engine.process_message(
-        user_id=request.user_id,
+@app.post(
+    "/message",
+    response_model=MessageResponse,
+)
+def message_endpoint(
+    request: MessageRequest,
+) -> MessageResponse:
+    response = application.chat(
+        session_id=request.user_id,
         message=request.message,
     )
 
     return MessageResponse(
         user_id=request.user_id,
-        response=response,
+        response=response.text,
     )
 
+
 @app.post("/reset")
-def reset_session(request: ResetRequest):
-    if request.user_id in engine.sessions:
-        del engine.sessions[request.user_id]
-        engine.session_store.save_all(engine.sessions)
+def reset_session(
+    request: ResetRequest,
+) -> dict[str, str]:
+    application.reset_session(request.user_id)
 
     return {
         "status": "ok",
@@ -79,21 +97,32 @@ def reset_session(request: ResetRequest):
         "message": "Session reset successfully",
     }
 
+
 @app.get("/health")
-def health():
+def health() -> dict[str, object]:
     return {
-        "status": "healthy"
+        "status": "healthy",
+        "service": "flowforge",
+        "instance": application.instance.name,
+        "active_sessions": application.conversation_store.count(),
     }
 
+
 @app.get("/demo", response_class=HTMLResponse)
-def demo_page():
+def demo_page() -> str:
     return f"""
     <!DOCTYPE html>
     <html lang="es">
     <head>
         <meta charset="UTF-8">
-        <title>Chatbot Core Demo</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>FlowForge Demo</title>
+
         <style>
+            * {{
+                box-sizing: border-box;
+            }}
+
             body {{
                 margin: 0;
                 font-family: Arial, sans-serif;
@@ -110,7 +139,7 @@ def demo_page():
                 max-width: 760px;
                 background: #ffffff;
                 border-radius: 18px;
-                box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
                 overflow: hidden;
             }}
 
@@ -121,7 +150,7 @@ def demo_page():
             }}
 
             .header h1 {{
-                margin: 0 0 8px 0;
+                margin: 0 0 8px;
                 font-size: 26px;
             }}
 
@@ -165,6 +194,13 @@ def demo_page():
                 border-bottom-left-radius: 4px;
             }}
 
+            .message.error {{
+                align-self: flex-start;
+                background: #fee2e2;
+                color: #991b1b;
+                border-bottom-left-radius: 4px;
+            }}
+
             .input-row {{
                 display: flex;
                 gap: 10px;
@@ -175,6 +211,7 @@ def demo_page():
 
             input {{
                 flex: 1;
+                min-width: 0;
                 padding: 13px 14px;
                 font-size: 16px;
                 border: 1px solid #d1d5db;
@@ -200,6 +237,11 @@ def demo_page():
                 background: #374151;
             }}
 
+            button:disabled {{
+                opacity: 0.6;
+                cursor: not-allowed;
+            }}
+
             .reset-button {{
                 background: #6b7280;
             }}
@@ -209,9 +251,28 @@ def demo_page():
             }}
 
             .hint {{
-                padding: 0 18px 18px 18px;
+                padding: 0 18px 18px;
                 font-size: 13px;
                 color: #6b7280;
+            }}
+
+            @media (max-width: 640px) {{
+                body {{
+                    padding: 0;
+                }}
+
+                .container {{
+                    min-height: 100vh;
+                    border-radius: 0;
+                }}
+
+                .input-row {{
+                    flex-wrap: wrap;
+                }}
+
+                input {{
+                    flex-basis: 100%;
+                }}
             }}
         </style>
     </head>
@@ -219,20 +280,36 @@ def demo_page():
     <body>
         <div class="container">
             <div class="header">
-                <h1>Chatbot Core Demo</h1>
-                <p class="subtitle">Template activo: {ACTIVE_TEMPLATE}</p>
+                <h1>FlowForge Demo</h1>
+                <p class="subtitle">
+                    Asistente: {application.instance.name}
+                </p>
             </div>
 
             <div id="chat"></div>
 
             <div class="input-row">
-                <input id="messageInput" type="text" placeholder="Escribe un mensaje..." autofocus />
-                <button onclick="sendMessage()">Enviar</button>
-                <button class="reset-button" onclick="resetChat()">Nueva conversación</button>
+                <input
+                    id="messageInput"
+                    type="text"
+                    placeholder="Escribe un mensaje..."
+                    autocomplete="off"
+                    autofocus
+                >
+                <button id="sendButton" onclick="sendMessage()">
+                    Enviar
+                </button>
+                <button
+                    id="resetButton"
+                    class="reset-button"
+                    onclick="resetChat()"
+                >
+                    Nueva conversación
+                </button>
             </div>
 
             <div class="hint">
-                Prueba: hola · 1 · 2 · 3 · menu
+                Prueba: hola · reservar · ¿qué días hay disponibles?
             </div>
         </div>
 
@@ -240,6 +317,8 @@ def demo_page():
             const userId = "demo_user";
             const chat = document.getElementById("chat");
             const input = document.getElementById("messageInput");
+            const sendButton = document.getElementById("sendButton");
+            const resetButton = document.getElementById("resetButton");
 
             function addMessage(text, cssClass) {{
                 const div = document.createElement("div");
@@ -249,7 +328,16 @@ def demo_page():
                 chat.scrollTop = chat.scrollHeight;
             }}
 
-            addMessage("Bienvenido. Escribe 'hola' para comenzar.", "bot");
+            function setBusy(isBusy) {{
+                input.disabled = isBusy;
+                sendButton.disabled = isBusy;
+                resetButton.disabled = isBusy;
+            }}
+
+            addMessage(
+                "Bienvenido. Escribe 'hola' para comenzar.",
+                "bot"
+            );
 
             async function sendMessage() {{
                 const message = input.value.trim();
@@ -260,57 +348,107 @@ def demo_page():
 
                 addMessage(message, "user");
                 input.value = "";
+                setBusy(true);
 
-                const response = await fetch("/message", {{
-                    method: "POST",
-                    headers: {{
-                        "Content-Type": "application/json"
-                    }},
-                    body: JSON.stringify({{
-                        user_id: userId,
-                        message: message
-                    }})
-                }});
+                try {{
+                    const response = await fetch("/message", {{
+                        method: "POST",
+                        headers: {{
+                            "Content-Type": "application/json"
+                        }},
+                        body: JSON.stringify({{
+                            user_id: userId,
+                            message: message
+                        }})
+                    }});
 
-                const data = await response.json();
-                addMessage(data.response, "bot");
+                    if (!response.ok) {{
+                        throw new Error(
+                            `HTTP ${{response.status}}`
+                        );
+                    }}
+
+                    const data = await response.json();
+                    addMessage(data.response, "bot");
+                }} catch (error) {{
+                    console.error(error);
+                    addMessage(
+                        "No se pudo conectar con FlowForge.",
+                        "error"
+                    );
+                }} finally {{
+                    setBusy(false);
+                    input.focus();
+                }}
             }}
 
             async function resetChat() {{
-                await fetch("/reset", {{
-                    method: "POST",
-                    headers: {{
-                        "Content-Type": "application/json"
-                    }},
-                    body: JSON.stringify({{
-                        user_id: userId
-                    }})
-                }});
+                setBusy(true);
 
-                chat.innerHTML = "";
-                addMessage("Nueva conversación iniciada. Escribe 'hola' para comenzar.", "bot");
-                input.focus();
+                try {{
+                    const response = await fetch("/reset", {{
+                        method: "POST",
+                        headers: {{
+                            "Content-Type": "application/json"
+                        }},
+                        body: JSON.stringify({{
+                            user_id: userId
+                        }})
+                    }});
+
+                    if (!response.ok) {{
+                        throw new Error(
+                            `HTTP ${{response.status}}`
+                        );
+                    }}
+
+                    chat.innerHTML = "";
+                    addMessage(
+                        "Nueva conversación iniciada. "
+                        + "Escribe 'hola' para comenzar.",
+                        "bot"
+                    );
+                }} catch (error) {{
+                    console.error(error);
+                    addMessage(
+                        "No se pudo reiniciar la conversación.",
+                        "error"
+                    );
+                }} finally {{
+                    setBusy(false);
+                    input.focus();
+                }}
             }}
 
-            input.addEventListener("keydown", function(event) {{
-                if (event.key === "Enter") {{
-                    sendMessage();
+            input.addEventListener(
+                "keydown",
+                function (event) {{
+                    if (event.key === "Enter") {{
+                        sendMessage();
+                    }}
                 }}
-            }});
+            );
         </script>
     </body>
     </html>
     """
 
+
 @app.get("/widget", response_class=HTMLResponse)
-def widget_page():
+def widget_page() -> str:
     return f"""
     <!DOCTYPE html>
     <html lang="es">
     <head>
         <meta charset="UTF-8">
-        <title>Chatbot Core Demo</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>FlowForge Widget</title>
+
         <style>
+            * {{
+                box-sizing: border-box;
+            }}
+
             body {{
                 margin: 0;
                 padding: 0;
@@ -319,12 +457,13 @@ def widget_page():
             }}
 
             .container {{
-                width: 420px;
-                height: 620px;
+                width: 100%;
+                height: 100vh;
+                min-height: 560px;
                 background: #ffffff;
-                border-radius: 18px;
-                box-shadow: 0 20px 60px rgba(0,0,0,0.25);
                 overflow: hidden;
+                display: flex;
+                flex-direction: column;
             }}
 
             .header {{
@@ -334,8 +473,8 @@ def widget_page():
             }}
 
             .header h1 {{
-                margin: 0 0 8px 0;
-                font-size: 26px;
+                margin: 0 0 8px;
+                font-size: 22px;
             }}
 
             .subtitle {{
@@ -345,8 +484,8 @@ def widget_page():
             }}
 
             #chat {{
+                flex: 1;
                 padding: 14px;
-                height: 380px;
                 overflow-y: auto;
                 background: #f9fafb;
                 display: flex;
@@ -377,18 +516,26 @@ def widget_page():
                 border-bottom-left-radius: 4px;
             }}
 
+            .message.error {{
+                align-self: flex-start;
+                background: #fee2e2;
+                color: #991b1b;
+                border-bottom-left-radius: 4px;
+            }}
+
             .input-row {{
                 display: flex;
-                gap: 10px;
-                padding: 18px;
+                gap: 8px;
+                padding: 12px;
                 border-top: 1px solid #e5e7eb;
                 background: white;
             }}
 
             input {{
                 flex: 1;
-                padding: 13px 14px;
-                font-size: 16px;
+                min-width: 0;
+                padding: 11px 12px;
+                font-size: 15px;
                 border: 1px solid #d1d5db;
                 border-radius: 10px;
                 outline: none;
@@ -412,6 +559,11 @@ def widget_page():
                 background: #374151;
             }}
 
+            button:disabled {{
+                opacity: 0.6;
+                cursor: not-allowed;
+            }}
+
             .reset-button {{
                 background: #6b7280;
             }}
@@ -421,8 +573,8 @@ def widget_page():
             }}
 
             .hint {{
-                padding: 0 18px 18px 18px;
-                font-size: 13px;
+                padding: 0 12px 12px;
+                font-size: 12px;
                 color: #6b7280;
             }}
         </style>
@@ -431,20 +583,36 @@ def widget_page():
     <body>
         <div class="container">
             <div class="header">
-                <h1>Chatbot Core Demo</h1>
-                <p class="subtitle">Template activo: {ACTIVE_TEMPLATE}</p>
+                <h1>FlowForge</h1>
+                <p class="subtitle">
+                    Asistente: {application.instance.name}
+                </p>
             </div>
 
             <div id="chat"></div>
 
             <div class="input-row">
-                <input id="messageInput" type="text" placeholder="Escribe un mensaje..." autofocus />
-                <button onclick="sendMessage()">Enviar</button>
-                <button class="reset-button" onclick="resetChat()">Nuevo chat</button>
+                <input
+                    id="messageInput"
+                    type="text"
+                    placeholder="Escribe un mensaje..."
+                    autocomplete="off"
+                    autofocus
+                >
+                <button id="sendButton" onclick="sendMessage()">
+                    Enviar
+                </button>
+                <button
+                    id="resetButton"
+                    class="reset-button"
+                    onclick="resetChat()"
+                >
+                    Nuevo
+                </button>
             </div>
 
             <div class="hint">
-                Prueba: hola · 1 · 2 · 3 · menu
+                Prueba: hola · reservar
             </div>
         </div>
 
@@ -452,6 +620,8 @@ def widget_page():
             const userId = "demo_user";
             const chat = document.getElementById("chat");
             const input = document.getElementById("messageInput");
+            const sendButton = document.getElementById("sendButton");
+            const resetButton = document.getElementById("resetButton");
 
             function addMessage(text, cssClass) {{
                 const div = document.createElement("div");
@@ -461,7 +631,16 @@ def widget_page():
                 chat.scrollTop = chat.scrollHeight;
             }}
 
-            addMessage("Bienvenido. Escribe 'hola' para comenzar.", "bot");
+            function setBusy(isBusy) {{
+                input.disabled = isBusy;
+                sendButton.disabled = isBusy;
+                resetButton.disabled = isBusy;
+            }}
+
+            addMessage(
+                "Bienvenido. Escribe 'hola' para comenzar.",
+                "bot"
+            );
 
             async function sendMessage() {{
                 const message = input.value.trim();
@@ -472,57 +651,107 @@ def widget_page():
 
                 addMessage(message, "user");
                 input.value = "";
+                setBusy(true);
 
-                const response = await fetch("/message", {{
-                    method: "POST",
-                    headers: {{
-                        "Content-Type": "application/json"
-                    }},
-                    body: JSON.stringify({{
-                        user_id: userId,
-                        message: message
-                    }})
-                }});
+                try {{
+                    const response = await fetch("/message", {{
+                        method: "POST",
+                        headers: {{
+                            "Content-Type": "application/json"
+                        }},
+                        body: JSON.stringify({{
+                            user_id: userId,
+                            message: message
+                        }})
+                    }});
 
-                const data = await response.json();
-                addMessage(data.response, "bot");
+                    if (!response.ok) {{
+                        throw new Error(
+                            `HTTP ${{response.status}}`
+                        );
+                    }}
+
+                    const data = await response.json();
+                    addMessage(data.response, "bot");
+                }} catch (error) {{
+                    console.error(error);
+                    addMessage(
+                        "No se pudo conectar con FlowForge.",
+                        "error"
+                    );
+                }} finally {{
+                    setBusy(false);
+                    input.focus();
+                }}
             }}
 
             async function resetChat() {{
-                await fetch("/reset", {{
-                    method: "POST",
-                    headers: {{
-                        "Content-Type": "application/json"
-                    }},
-                    body: JSON.stringify({{
-                        user_id: userId
-                    }})
-                }});
+                setBusy(true);
 
-                chat.innerHTML = "";
-                addMessage("Nueva conversación iniciada. Escribe 'hola' para comenzar.", "bot");
-                input.focus();
+                try {{
+                    const response = await fetch("/reset", {{
+                        method: "POST",
+                        headers: {{
+                            "Content-Type": "application/json"
+                        }},
+                        body: JSON.stringify({{
+                            user_id: userId
+                        }})
+                    }});
+
+                    if (!response.ok) {{
+                        throw new Error(
+                            `HTTP ${{response.status}}`
+                        );
+                    }}
+
+                    chat.innerHTML = "";
+                    addMessage(
+                        "Nueva conversación iniciada. "
+                        + "Escribe 'hola' para comenzar.",
+                        "bot"
+                    );
+                }} catch (error) {{
+                    console.error(error);
+                    addMessage(
+                        "No se pudo reiniciar la conversación.",
+                        "error"
+                    );
+                }} finally {{
+                    setBusy(false);
+                    input.focus();
+                }}
             }}
 
-            input.addEventListener("keydown", function(event) {{
-                if (event.key === "Enter") {{
-                    sendMessage();
+            input.addEventListener(
+                "keydown",
+                function (event) {{
+                    if (event.key === "Enter") {{
+                        sendMessage();
+                    }}
                 }}
-            }});
+            );
         </script>
     </body>
     </html>
     """
 
+
 @app.get("/test_embed", response_class=HTMLResponse)
-def test_embed():
+def test_embed() -> str:
     return """
     <!DOCTYPE html>
-    <html>
+    <html lang="es">
     <head>
-        <title>Demo Cliente</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Demo cliente FlowForge</title>
 
         <style>
+            * {
+                box-sizing: border-box;
+            }
+
             body {
                 font-family: Arial, sans-serif;
                 margin: 40px;
@@ -537,13 +766,6 @@ def test_embed():
                 border-radius: 12px;
             }
 
-            iframe {
-                border: none;
-                width: 420px;
-                height: 620px;
-                margin-top: 20px;
-            }
-
             #chatButton {
                 position: fixed;
                 bottom: 20px;
@@ -556,7 +778,7 @@ def test_embed():
                 color: white;
                 cursor: pointer;
                 font-size: 16px;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
             }
 
             #chatWidget {
@@ -564,26 +786,42 @@ def test_embed():
                 bottom: 100px;
                 right: 20px;
                 width: 420px;
-                height: 560px;
+                height: 620px;
                 display: none;
                 background: white;
                 border-radius: 16px;
                 overflow: hidden;
-                box-shadow: 0 8px 30px rgba(0,0,0,0.3);
-                padding: 0;
+                box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
             }
 
             #chatWidget iframe {
-                width: 420px;
-                height: 560px;
+                width: 100%;
+                height: 100%;
                 border: none;
                 display: block;
+            }
+
+            @media (max-width: 500px) {
+                body {
+                    margin: 20px;
+                }
+
+                #chatWidget {
+                    right: 10px;
+                    bottom: 95px;
+                    width: calc(100vw - 20px);
+                    height: calc(100vh - 120px);
+                }
+
+                #chatButton {
+                    right: 10px;
+                    bottom: 10px;
+                }
             }
         </style>
     </head>
 
     <body>
-
         <div class="content">
             <h1>Web de ejemplo</h1>
 
@@ -592,32 +830,43 @@ def test_embed():
             </p>
 
             <p>
-                Debajo aparece el chatbot incrustado mediante iframe.
+                Pulsa el botón para abrir o cerrar el chatbot.
             </p>
-
-            <button id="chatButton">
-                💬 Chat
-            </button>
-
-            <div id="chatWidget">
-                <iframe src="/widget"></iframe>
-            </div>
-
         </div>
 
-    <script>
-        const button = document.getElementById("chatButton");
-        const widget = document.getElementById("chatWidget");
+        <button
+            id="chatButton"
+            type="button"
+            aria-controls="chatWidget"
+            aria-expanded="false"
+        >
+            💬 Chat
+        </button>
 
-        button.addEventListener("click", () => {
-            if (widget.style.display === "block") {
-                widget.style.display = "none";
-            } else {
-                widget.style.display = "block";
-            }
-        });
-    </script>
+        <div id="chatWidget">
+            <iframe
+                src="/widget"
+                title="Asistente FlowForge"
+            ></iframe>
+        </div>
 
+        <script>
+            const button = document.getElementById("chatButton");
+            const widget = document.getElementById("chatWidget");
+
+            button.addEventListener("click", () => {
+                const isOpen = widget.style.display === "block";
+
+                widget.style.display = isOpen
+                    ? "none"
+                    : "block";
+
+                button.setAttribute(
+                    "aria-expanded",
+                    String(!isOpen)
+                );
+            });
+        </script>
     </body>
     </html>
     """
