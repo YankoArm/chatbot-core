@@ -131,7 +131,7 @@ def test_booking_capability_does_not_advance_with_invalid_date():
 
     response = capability.handle(
         context=context,
-        message="mañana",
+        message="ahora",
     )
 
     assert context.booking.date is None
@@ -140,4 +140,27 @@ def test_booking_capability_does_not_advance_with_invalid_date():
     assert response.text == (
         "La fecha no parece válida. "
         "Escríbela con el formato DD/MM/YYYY."
+    )
+
+def test_booking_capability_does_not_advance_with_invalid_time():
+    capability = BookingCapability()
+    context = ConversationContext(session_id="user_1")
+
+    context.booking = BookingState(
+        name="Yanko",
+        phone="600123123",
+        date="25/07/2026",
+    )
+
+    response = capability.handle(
+        context=context,
+        message="ahora",
+    )
+
+    assert context.booking.time is None
+    assert context.booking.next_step is BookingStep.TIME
+
+    assert response.text == (
+        "La hora no parece válida. "
+        "Escríbela con el formato HH:MM."
     )

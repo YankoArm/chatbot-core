@@ -114,7 +114,18 @@ class BookingCapability(BaseCapability):
         )
 
     def _handle_time(self, context: Any, message: str) -> Response:
-        context.booking.time = message.strip()
+        time = message.strip()
+
+        if not self._is_valid_time(time):
+            return self._response(
+                context,
+                (
+                    "La hora no parece válida. "
+                    "Escríbela con el formato HH:MM."
+                ),
+            )
+
+        context.booking.time = time
 
         return self._response(
             context,
@@ -161,6 +172,14 @@ class BookingCapability(BaseCapability):
     def _is_valid_date(self, date: str) -> bool:
         try:
             datetime.strptime(date, "%d/%m/%Y")
+        except ValueError:
+            return False
+
+        return True
+
+    def _is_valid_time(self, time: str) -> bool:
+        try:
+            datetime.strptime(time, "%H:%M")
         except ValueError:
             return False
 
