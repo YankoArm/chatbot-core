@@ -53,84 +53,57 @@ class BookingCapability(BaseCapability):
     def _start_booking(self, context: Any) -> Response:
         context.booking = BookingState()
 
-        return Response(
-            text="Perfecto. Vamos a reservar una cita. ¿Cómo te llamas?",
-            metadata={
-                "capability": self.name,
-                "handled": True,
-                "booking_step": context.booking.next_step.value,
-            },
+        return self._response(
+            context,
+            "Perfecto. Vamos a reservar una cita. ¿Cómo te llamas?",
         )
 
     def _handle_name(self, context: Any, message: str) -> Response:
         context.booking.name = message.strip()
 
-        return Response(
-            text=(
+        return self._response(
+            context,
+            (
                 f"Encantado, {context.booking.name}. "
                 "¿Cuál es tu número de teléfono?"
             ),
-            metadata={
-                "capability": self.name,
-                "handled": True,
-                "booking_step": context.booking.next_step.value,
-            },
         )
 
     def _handle_phone(self, context: Any, message: str) -> Response:
         phone = message.strip()
 
         if not phone.isdigit():
-            return Response(
-                text=(
-                    "El teléfono no parece válido. "
-                    "¿Puedes escribirlo de nuevo?"
-                ),
-                metadata={
-                    "capability": self.name,
-                    "handled": True,
-                    "booking_step": context.booking.next_step.value,
-                },
+            return self._response(
+                context,
+                "El teléfono no parece válido. ¿Puedes escribirlo de nuevo?"
             )
-
+            
         context.booking.phone = phone
 
-        return Response(
-            text="¿Para qué día quieres la cita?",
-            metadata={
-                "capability": self.name,
-                "handled": True,
-                "booking_step": context.booking.next_step.value,
-            },
+        return self._response(
+            context,
+            "¿Para qué día quieres la cita?",
         )
 
     def _handle_date(self, context: Any, message: str) -> Response:
         context.booking.date = message.strip()
 
-        return Response(
-            text="¿A qué hora quieres la cita?",
-            metadata={
-                "capability": self.name,
-                "handled": True,
-                "booking_step": context.booking.next_step.value,
-            },
+        return self._response(
+            context,
+            "¿A qué hora quieres la cita?",
         )
 
     def _handle_time(self, context: Any, message: str) -> Response:
         context.booking.time = message.strip()
 
-        return Response(
-            text=(
+        return self._response(
+            context,
+            (
                 f"Perfecto, {context.booking.name}. "
                 f"He registrado tu solicitud para "
                 f"{context.booking.date} a las "
                 f"{context.booking.time}."
             ),
-            metadata={
-                "capability": self.name,
-                "handled": True,
-                "booking_step": context.booking.next_step.value,
-            },
         )
 
     def _get_step_handler(self, step: BookingStep):
@@ -147,3 +120,17 @@ class BookingCapability(BaseCapability):
             return self._handle_time
 
         return None
+
+    def _response(
+        self,
+        context: Any,
+        text: str,
+    ) -> Response:
+        return Response(
+            text=text,
+            metadata={
+                "capability": self.name,
+                "handled": True,
+                "booking_step": context.booking.next_step.value,
+            },
+        )
