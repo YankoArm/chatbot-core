@@ -3,6 +3,7 @@ from typing import Any
 from chatbot.booking import BookingState, BookingStep
 from chatbot.capabilities.base_capability import BaseCapability
 from chatbot.responses import Response
+from datetime import datetime
 
 _BOOKING_KEYWORDS = (
     "reserv",
@@ -59,7 +60,15 @@ class BookingCapability(BaseCapability):
         )
 
     def _handle_name(self, context: Any, message: str) -> Response:
-        context.booking.name = message.strip()
+        name = message.strip()
+
+        if not self._is_valid_name(name):
+            return self._response(
+                context,
+                "Ese nombre no parece válido. ¿Puedes escribirlo de nuevo?",
+            )
+
+        context.booking.name = name
 
         return self._response(
             context,
@@ -86,7 +95,18 @@ class BookingCapability(BaseCapability):
         )
 
     def _handle_date(self, context: Any, message: str) -> Response:
-        context.booking.date = message.strip()
+        date = message.strip()
+
+        if not self._is_valid_date(date):
+            return self._response(
+                context,
+                (
+                    "La fecha no parece válida. "
+                    "Escríbela con el formato DD/MM/YYYY."
+                ),
+            )
+
+        context.booking.date = date
 
         return self._response(
             context,
@@ -134,3 +154,14 @@ class BookingCapability(BaseCapability):
                 "booking_step": context.booking.next_step.value,
             },
         )
+
+    def _is_valid_name(self, name: str) -> bool:
+        return len(name) >= 2 and not name.isdigit()
+
+    def _is_valid_date(self, date: str) -> bool:
+        try:
+            datetime.strptime(date, "%d/%m/%Y")
+        except ValueError:
+            return False
+
+        return True

@@ -2,7 +2,6 @@ from chatbot.booking import BookingState, BookingStep
 from chatbot.capabilities.booking import BookingCapability
 from chatbot.conversation.context import ConversationContext
 
-
 def test_booking_capability_stores_name_and_requests_phone() -> None:
     capability = BookingCapability()
     context = ConversationContext(session_id="user_1")
@@ -51,10 +50,10 @@ def test_booking_capability_stores_date_and_requests_time() -> None:
 
     response = capability.handle(
         context=context,
-        message="Mañana",
+        message="25/07/2026",
     )
 
-    assert context.booking.date == "Mañana"
+    assert context.booking.date == "25/07/2026"
     assert context.booking.next_step is BookingStep.TIME
     assert response.text == "¿A qué hora quieres la cita?"
 
@@ -100,4 +99,45 @@ def test_booking_capability_does_not_advance_with_invalid_phone():
     assert response.text == (
         "El teléfono no parece válido. "
         "¿Puedes escribirlo de nuevo?"
+    )
+
+def test_booking_capability_does_not_advance_with_invalid_name():
+    capability = BookingCapability()
+    context = ConversationContext(session_id="user_1")
+
+    context.booking = BookingState()
+
+    response = capability.handle(
+        context=context,
+        message="1",
+    )
+
+    assert context.booking.name is None
+    assert context.booking.next_step is BookingStep.NAME
+
+    assert response.text == (
+        "Ese nombre no parece válido. "
+        "¿Puedes escribirlo de nuevo?"
+    )
+
+def test_booking_capability_does_not_advance_with_invalid_date():
+    capability = BookingCapability()
+    context = ConversationContext(session_id="user_1")
+
+    context.booking = BookingState(
+        name="Yanko",
+        phone="600123123",
+    )
+
+    response = capability.handle(
+        context=context,
+        message="mañana",
+    )
+
+    assert context.booking.date is None
+    assert context.booking.next_step is BookingStep.DATE
+
+    assert response.text == (
+        "La fecha no parece válida. "
+        "Escríbela con el formato DD/MM/YYYY."
     )
