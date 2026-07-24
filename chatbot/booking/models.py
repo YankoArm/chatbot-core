@@ -1,15 +1,23 @@
 from __future__ import annotations
 
-from enum import Enum
+from dataclasses import dataclass
+
+from chatbot.booking.state import BookingStep
 
 
-class BookingStep(str, Enum):
+@dataclass(frozen=True, slots=True)
+class Booking:
     """
-    Steps required to complete a booking request.
+    Complete booking request ready to be processed or persisted.
     """
 
-    NAME = "name"
-    PHONE = "phone"
-    DATE = "date"
-    TIME = "time"
-    COMPLETE = "complete"
+    name: str
+    phone: str
+    date: str
+    time: str
+
+
+__all__ = [
+    "Booking",
+    "BookingStep",
+]

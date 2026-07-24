@@ -1,14 +1,25 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 
-from chatbot.booking.models import BookingStep
+
+class BookingStep(str, Enum):
+    """
+    Steps required to complete a booking request.
+    """
+
+    NAME = "name"
+    PHONE = "phone"
+    DATE = "date"
+    TIME = "time"
+    COMPLETE = "complete"
 
 
 @dataclass(slots=True)
 class BookingState:
     """
-    Runtime state of an ongoing booking request.
+    Runtime state of an ongoing booking conversation.
     """
 
     name: str | None = None
