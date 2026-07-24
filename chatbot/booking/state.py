@@ -13,6 +13,7 @@ class BookingStep(str, Enum):
     PHONE = "phone"
     DATE = "date"
     TIME = "time"
+    CONFIRMATION = "confirmation"
     COMPLETE = "complete"
 
 
@@ -20,6 +21,9 @@ class BookingStep(str, Enum):
 class BookingState:
     """
     Runtime state of an ongoing booking conversation.
+
+    The state contains both the information collected from the user
+    and the identifiers generated when the booking is confirmed.
     """
 
     name: str | None = None
@@ -27,8 +31,16 @@ class BookingState:
     date: str | None = None
     time: str | None = None
 
+    confirmed: bool = False
+    notes: str | None = None
+    booking_id: str | None = None
+
     @property
-    def is_complete(self) -> bool:
+    def has_required_data(self) -> bool:
+        """
+        Return whether all mandatory booking information has been collected.
+        """
+
         return all(
             (
                 self.name,
@@ -39,7 +51,19 @@ class BookingState:
         )
 
     @property
+    def is_complete(self) -> bool:
+        """
+        Return whether the booking data is complete and confirmed.
+        """
+
+        return self.has_required_data and self.confirmed
+
+    @property
     def next_step(self) -> BookingStep:
+        """
+        Return the next step required by the booking flow.
+        """
+
         if not self.name:
             return BookingStep.NAME
 
@@ -52,10 +76,39 @@ class BookingState:
         if not self.time:
             return BookingStep.TIME
 
+        if not self.confirmed:
+            return BookingStep.CONFIRMATION
+
         return BookingStep.COMPLETE
 
+    def confirm(
+        self,
+        booking_id: str | None = None,
+    ) -> None:
+        """
+        Mark the booking as confirmed.
+
+        The optional booking identifier can contain an external reference,
+        such as a Google Calendar event ID.
+        """
+
+        if not self.has_required_data:
+            raise ValueError(
+                "Cannot confirm a booking with incomplete required data."
+            )
+
+        self.confirmed = True
+        self.booking_id = booking_id
+
     def reset(self) -> None:
+        """
+        Restore the booking state to its initial values.
+        """
+
         self.name = None
         self.phone = None
         self.date = None
         self.time = None
+        self.confirmed = False
+        self.notes = None
+        self.booking_id = None

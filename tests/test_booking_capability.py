@@ -59,14 +59,14 @@ def test_booking_capability_stores_date_and_requests_time() -> None:
     assert context.booking.next_step is BookingStep.TIME
     assert response.text == "¿A qué hora quieres la cita?"
 
-def test_booking_capability_completes_booking() -> None:
+def test_booking_capability_moves_to_confirmation_after_time() -> None:
     capability = BookingCapability()
     context = ConversationContext(session_id="user_1")
 
     context.booking = BookingState(
         name="Yanko",
         phone="600123123",
-        date="Mañana",
+        date="28/07/2026",
     )
     context.set_active_capability("booking")
 
@@ -76,10 +76,15 @@ def test_booking_capability_completes_booking() -> None:
     )
 
     assert context.booking.time == "17:00"
-    assert context.booking.is_complete is True
-    assert response.text == (
-        "Perfecto, Yanko. He registrado tu solicitud para Mañana a las 17:00."
-    )
+    assert context.booking.has_required_data is True
+    assert context.booking.is_complete is False
+    assert context.booking.next_step is BookingStep.CONFIRMATION
+
+    assert "Estos son los datos de tu reserva" in response.text
+    assert "Yanko" in response.text
+    assert "600123123" in response.text
+    assert "28/07/2026" in response.text
+    assert "17:00" in response.text
 
 def test_booking_capability_does_not_advance_with_invalid_phone():
     capability = BookingCapability()
@@ -100,7 +105,7 @@ def test_booking_capability_does_not_advance_with_invalid_phone():
 
     assert response.text == (
         "El teléfono no parece válido. "
-        "¿Puedes escribirlo de nuevo?"
+        "Escribe únicamente entre 7 y 15 dígitos."
     )
 
 def test_booking_capability_does_not_advance_with_invalid_name():
@@ -220,3 +225,68 @@ def test_booking_capability_recognizes_availability_questions(
     assert context.booking.date is None
     assert context.booking.next_step is BookingStep.DATE
     assert "Tengo disponibilidad" in response.text
+
+def test_booking_capability_confirms_booking() -> None:
+    capability = BookingCapability()
+    context = ConversationContext(session_id="user_1")
+
+    context.booking = BookingState(
+        name="Yanko",
+        phone="600123123",
+        date="28/07/2026",
+        time="17:00",
+    )
+    context.set_active_capability("booking")
+
+    response = capability.handle(
+        context=context,
+        message="sí",
+    )
+
+    assert context.booking.confirmed is True
+    assert context.booking.is_complete is True
+    assert context.booking.next_step is BookingStep.COMPLETE
+    assert "Reserva confirmada correctamente" in response.text
+
+def test_booking_capability_cancels_booking() -> None:
+    capability = BookingCapability()
+    context = ConversationContext(session_id="user_1")
+
+    context.booking = BookingState(
+        name="Yanko",
+        phone="600123123",
+        date="28/07/2026",
+        time="17:00",
+    )
+    context.set_active_capability("booking")
+
+    response = capability.handle(
+        context=context,
+        message="no",
+    )
+
+    assert context.booking is None
+    assert "cancelada" in response.text.lower()
+    assert response.metadata["booking_step"] == "cancelled"
+
+def test_booking_capability_keeps_confirmation_step_for_unknown_answer() -> None:
+    capability = BookingCapability()
+    context = ConversationContext(session_id="user_1")
+
+    context.booking = BookingState(
+        name="Yanko",
+        phone="600123123",
+        date="28/07/2026",
+        time="17:00",
+    )
+    context.set_active_capability("booking")
+
+    response = capability.handle(
+        context=context,
+        message="quizás",
+    )
+
+    assert context.booking.confirmed is False
+    assert context.booking.next_step is BookingStep.CONFIRMATION
+    assert "sí" in response.text.lower()
+    assert "no" in response.text.lower()

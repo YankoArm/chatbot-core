@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from typing import Any
 import re
 import unicodedata
+from datetime import datetime
+from typing import Any, Callable
 
 from chatbot.booking import BookingState, BookingStep
 from chatbot.capabilities.base_capability import BaseCapability
 from chatbot.responses import Response
-from datetime import datetime
+
 
 _BOOKING_KEYWORDS = (
     "reserv",
@@ -17,11 +18,34 @@ _BOOKING_KEYWORDS = (
     "booking",
 )
 
+_CONFIRMATION_WORDS = {
+    "si",
+    "confirmar",
+    "confirmo",
+    "confirmada",
+    "correcto",
+    "correcta",
+    "vale",
+    "ok",
+    "de acuerdo",
+    "adelante",
+}
+
+_CANCELLATION_WORDS = {
+    "no",
+    "cancelar",
+    "cancelo",
+    "cancelada",
+    "anular",
+    "anulo",
+    "salir",
+}
+
 
 class BookingCapability(BaseCapability):
     name = "booking"
     version = "1.0"
-    dependencies = []
+    dependencies: list[str] = []
 
     def register(self, context: dict[str, Any]) -> None:
         context.setdefault("flows", [])
@@ -29,47 +53,66 @@ class BookingCapability(BaseCapability):
 
         context["flows"].append("booking_flow")
 
-    def can_handle(self, context: Any, message: str) -> bool:
-        text = message.lower().strip()
+    def can_handle(
+        self,
+        context: Any,
+        message: str,
+    ) -> bool:
+        text = self._normalize_text(message)
 
         return any(
             keyword in text
             for keyword in _BOOKING_KEYWORDS
         )
 
-    def handle(self, context: Any, message: str) -> Response:
+    def handle(
+        self,
+        context: Any,
+        message: str,
+    ) -> Response:
         if context.booking is None:
             return self._start_booking(context)
 
-        handler = self._get_step_handler(context.booking.next_step)
+        handler = self._get_step_handler(
+            context.booking.next_step
+        )
 
         if handler is not None:
             return handler(context, message)
 
-        return Response(
-            text="La reserva ya está en curso.",
-            metadata={
-                "capability": self.name,
-                "handled": True,
-                "booking_step": context.booking.next_step.value,
-            },
+        return self._response(
+            context,
+            "La reserva ya está confirmada.",
         )
 
-    def _start_booking(self, context: Any) -> Response:
+    def _start_booking(
+        self,
+        context: Any,
+    ) -> Response:
         context.booking = BookingState()
 
         return self._response(
             context,
-            "Perfecto. Vamos a reservar una cita. ¿Cómo te llamas?",
+            (
+                "Perfecto. Vamos a reservar una cita. "
+                "¿Cómo te llamas?"
+            ),
         )
 
-    def _handle_name(self, context: Any, message: str) -> Response:
+    def _handle_name(
+        self,
+        context: Any,
+        message: str,
+    ) -> Response:
         name = message.strip()
 
         if not self._is_valid_name(name):
             return self._response(
                 context,
-                "Ese nombre no parece válido. ¿Puedes escribirlo de nuevo?",
+                (
+                    "Ese nombre no parece válido. "
+                    "¿Puedes escribirlo de nuevo?"
+                ),
             )
 
         context.booking.name = name
@@ -82,15 +125,22 @@ class BookingCapability(BaseCapability):
             ),
         )
 
-    def _handle_phone(self, context: Any, message: str) -> Response:
-        phone = message.strip()
+    def _handle_phone(
+        self,
+        context: Any,
+        message: str,
+    ) -> Response:
+        phone = self._normalize_phone(message)
 
-        if not phone.isdigit():
+        if not self._is_valid_phone(phone):
             return self._response(
                 context,
-                "El teléfono no parece válido. ¿Puedes escribirlo de nuevo?"
+                (
+                    "El teléfono no parece válido. "
+                    "Escribe únicamente entre 7 y 15 dígitos."
+                ),
             )
-            
+
         context.booking.phone = phone
 
         return self._response(
@@ -144,8 +194,12 @@ class BookingCapability(BaseCapability):
             context,
             "¿A qué hora quieres la cita?",
         )
-    
-    def _handle_time(self, context: Any, message: str) -> Response:
+
+    def _handle_time(
+        self,
+        context: Any,
+        message: str,
+    ) -> Response:
         time = message.strip()
 
         if not self._is_valid_time(time):
@@ -161,88 +215,162 @@ class BookingCapability(BaseCapability):
 
         return self._response(
             context,
-            (
-                f"Perfecto, {context.booking.name}. "
-                f"He registrado tu solicitud para "
-                f"{context.booking.date} a las "
-                f"{context.booking.time}."
+            self._build_confirmation_summary(
+                context.booking
             ),
         )
 
-    def _get_step_handler(self, step: BookingStep):
-        if step is BookingStep.NAME:
-            return self._handle_name
+    def _handle_confirmation(
+        self,
+        context: Any,
+        message: str,
+    ) -> Response:
+        normalized = self._normalize_text(message)
 
-        if step is BookingStep.PHONE:
-            return self._handle_phone
+        if normalized in _CONFIRMATION_WORDS:
+            context.booking.confirm()
 
-        if step is BookingStep.DATE:
-            return self._handle_date
+            return self._response(
+                context,
+                (
+                    "Reserva confirmada correctamente.\n\n"
+                    f"Nombre: {context.booking.name}\n"
+                    f"Teléfono: {context.booking.phone}\n"
+                    f"Fecha: {context.booking.date}\n"
+                    f"Hora: {context.booking.time}"
+                ),
+            )
 
-        if step is BookingStep.TIME:
-            return self._handle_time
+        if normalized in _CANCELLATION_WORDS:
+            context.booking = None
 
-        return None
+            return Response(
+                text=(
+                    "La solicitud de reserva ha sido cancelada. "
+                    "Puedes empezar otra cuando quieras."
+                ),
+                metadata={
+                    "capability": self.name,
+                    "handled": True,
+                    "booking_step": "cancelled",
+                },
+            )
+
+        return self._response(
+            context,
+            (
+                "No he entendido la respuesta. "
+                "Escribe «sí» para confirmar "
+                "o «no» para cancelar."
+            ),
+        )
+
+    def _get_step_handler(
+        self,
+        step: BookingStep,
+    ) -> Callable[[Any, str], Response] | None:
+        handlers = {
+            BookingStep.NAME: self._handle_name,
+            BookingStep.PHONE: self._handle_phone,
+            BookingStep.DATE: self._handle_date,
+            BookingStep.TIME: self._handle_time,
+            BookingStep.CONFIRMATION: self._handle_confirmation,
+        }
+
+        return handlers.get(step)
+
+    def _build_confirmation_summary(
+        self,
+        booking: BookingState,
+    ) -> str:
+        return (
+            "Estos son los datos de tu reserva:\n\n"
+            f"Nombre: {booking.name}\n"
+            f"Teléfono: {booking.phone}\n"
+            f"Fecha: {booking.date}\n"
+            f"Hora: {booking.time}\n\n"
+            "¿Quieres confirmar la reserva? "
+            "Responde «sí» para confirmar "
+            "o «no» para cancelar."
+        )
 
     def _response(
         self,
         context: Any,
         text: str,
     ) -> Response:
+        booking_step = (
+            context.booking.next_step.value
+            if context.booking is not None
+            else "inactive"
+        )
+
         return Response(
             text=text,
             metadata={
                 "capability": self.name,
                 "handled": True,
-                "booking_step": context.booking.next_step.value,
+                "booking_step": booking_step,
             },
         )
 
-    def _is_valid_name(self, name: str) -> bool:
-        return len(name) >= 2 and not name.isdigit()
+    @staticmethod
+    def _is_valid_name(name: str) -> bool:
+        cleaned_name = name.strip()
 
-    def _is_valid_date(self, date: str) -> bool:
-        try:
-            datetime.strptime(date, "%d/%m/%Y")
-        except ValueError:
+        if len(cleaned_name) < 2:
             return False
 
-        return True
-
-    def _is_valid_time(self, time: str) -> bool:
-        try:
-            datetime.strptime(time, "%H:%M")
-        except ValueError:
-            return False
-
-        return True
+        return any(
+            character.isalpha()
+            for character in cleaned_name
+        )
 
     @staticmethod
-    def _asks_for_available_dates(message: str) -> bool:
-        normalized = unicodedata.normalize(
-            "NFKD",
-            message,
+    def _normalize_phone(phone: str) -> str:
+        return re.sub(
+            r"[\s()+-]",
+            "",
+            phone.strip(),
         )
 
-        normalized = "".join(
-            character
-            for character in normalized
-            if not unicodedata.combining(character)
+    @staticmethod
+    def _is_valid_phone(phone: str) -> bool:
+        return (
+            phone.isdigit()
+            and 7 <= len(phone) <= 15
         )
 
-        normalized = normalized.casefold()
+    @staticmethod
+    def _is_valid_date(date: str) -> bool:
+        try:
+            parsed_date = datetime.strptime(
+                date,
+                "%d/%m/%Y",
+            )
+        except ValueError:
+            return False
 
-        normalized = re.sub(
-            r"[^a-z0-9\s]",
-            " ",
-            normalized,
-        )
+        return parsed_date.date() >= datetime.now().date()
 
-        normalized = re.sub(
-            r"\s+",
-            " ",
-            normalized,
-        ).strip()
+    @staticmethod
+    def _is_valid_time(time: str) -> bool:
+        try:
+            datetime.strptime(
+                time,
+                "%H:%M",
+            )
+        except ValueError:
+            return False
+
+        return True
+
+    @classmethod
+    def _asks_for_available_dates(
+        cls,
+        message: str,
+    ) -> bool:
+        normalized = cls._normalize_text(message)
 
         availability_words = {
             "disponible",
@@ -295,21 +423,50 @@ class BookingCapability(BaseCapability):
             for pattern in question_patterns
         )
 
+        starts_as_question = normalized.startswith(
+            (
+                "que ",
+                "cuales ",
+                "dime ",
+                "cuando ",
+            )
+        )
+
         return (
             matches_question_pattern
             or has_availability_word
             or (
                 has_date_word
-                and normalized.startswith(
-                    (
-                        "que ",
-                        "cuales ",
-                        "dime ",
-                        "cuando ",
-                    )
-                )
+                and starts_as_question
             )
         )
+
+    @staticmethod
+    def _normalize_text(message: str) -> str:
+        normalized = unicodedata.normalize(
+            "NFKD",
+            message,
+        )
+
+        normalized = "".join(
+            character
+            for character in normalized
+            if not unicodedata.combining(character)
+        )
+
+        normalized = normalized.casefold()
+
+        normalized = re.sub(
+            r"[^a-z0-9\s]",
+            " ",
+            normalized,
+        )
+
+        return re.sub(
+            r"\s+",
+            " ",
+            normalized,
+        ).strip()
 
     def _get_available_dates(self) -> list[str]:
         return [
