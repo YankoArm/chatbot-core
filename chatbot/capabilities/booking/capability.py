@@ -7,51 +7,233 @@ from typing import Any, Callable
 
 from chatbot.booking import BookingState, BookingStep
 from chatbot.capabilities.base_capability import BaseCapability
+from chatbot.language import Language
 from chatbot.responses import Response
 
 
-_BOOKING_KEYWORDS = (
-    "reserv",
-    "cita",
-    "appointment",
-    "book",
-    "booking",
-)
+_BOOKING_KEYWORDS = {
+    Language.ES: (
+        "reserv",
+        "cita",
+        "pedir hora",
+        "agendar",
+    ),
+    Language.EN: (
+        "appointment",
+        "book",
+        "booking",
+        "schedule",
+        "reservation",
+    ),
+}
 
 _CONFIRMATION_WORDS = {
-    "si",
-    "confirmar",
-    "confirmo",
-    "confirmada",
-    "correcto",
-    "correcta",
-    "vale",
-    "ok",
-    "de acuerdo",
-    "adelante",
+    Language.ES: {
+        "si",
+        "confirmar",
+        "confirmo",
+        "confirmada",
+        "correcto",
+        "correcta",
+        "vale",
+        "de acuerdo",
+        "adelante",
+        "ok",
+    },
+    Language.EN: {
+        "yes",
+        "confirm",
+        "confirmed",
+        "correct",
+        "okay",
+        "go ahead",
+        "proceed",
+        "sure",
+        "ok",
+    },
 }
 
 _CANCELLATION_WORDS = {
-    "no",
-    "cancelar",
-    "cancelo",
-    "cancelada",
-    "anular",
-    "anulo",
-    "salir",
+    Language.ES: {
+        "no",
+        "cancelar",
+        "cancelo",
+        "cancelada",
+        "anular",
+        "anulo",
+        "salir",
+    },
+    Language.EN: {
+        "no",
+        "cancel",
+        "cancel it",
+        "stop",
+        "exit",
+        "leave",
+        "never mind",
+        "nevermind",
+    },
+}
+
+_TEXTS = {
+    Language.ES: {
+        "already_confirmed": "La reserva ya está confirmada.",
+        "start": (
+            "Perfecto. Vamos a reservar una cita. "
+            "¿Cómo te llamas?"
+        ),
+        "invalid_name": (
+            "Ese nombre no parece válido. "
+            "¿Puedes escribirlo de nuevo?"
+        ),
+        "ask_phone": (
+            "Encantado, {name}. "
+            "¿Cuál es tu número de teléfono?"
+        ),
+        "invalid_phone": (
+            "El teléfono no parece válido. "
+            "Escribe únicamente entre 7 y 15 dígitos."
+        ),
+        "ask_date": "¿Para qué día quieres la cita?",
+        "no_available_dates": (
+            "Ahora mismo no tengo fechas disponibles. "
+            "Inténtalo de nuevo más adelante."
+        ),
+        "available_dates": (
+            "Tengo disponibilidad para los siguientes días: "
+            "{dates}. ¿Qué día prefieres?"
+        ),
+        "invalid_date": (
+            "La fecha no parece válida. "
+            "Escríbela con el formato DD/MM/YYYY "
+            "o pregúntame qué días hay disponibles."
+        ),
+        "ask_time": "¿A qué hora quieres la cita?",
+        "invalid_time": (
+            "La hora no parece válida. "
+            "Escríbela con el formato HH:MM."
+        ),
+        "confirmation_summary": (
+            "Estos son los datos de tu reserva:\n\n"
+            "Nombre: {name}\n"
+            "Teléfono: {phone}\n"
+            "Fecha: {date}\n"
+            "Hora: {time}\n\n"
+            "¿Quieres confirmar la reserva? "
+            "Responde «sí» para confirmar "
+            "o «no» para cancelar."
+        ),
+        "confirmed": (
+            "Reserva confirmada correctamente.\n\n"
+            "Nombre: {name}\n"
+            "Teléfono: {phone}\n"
+            "Fecha: {date}\n"
+            "Hora: {time}"
+        ),
+        "cancelled": (
+            "La solicitud de reserva ha sido cancelada. "
+            "Puedes empezar otra cuando quieras."
+        ),
+        "unknown_confirmation": (
+            "No he entendido la respuesta. "
+            "Escribe «sí» para confirmar "
+            "o «no» para cancelar."
+        ),
+    },
+    Language.EN: {
+        "already_confirmed": (
+            "The appointment has already been confirmed."
+        ),
+        "start": (
+            "Perfect. Let's book an appointment. "
+            "What's your name?"
+        ),
+        "invalid_name": (
+            "That name doesn't seem valid. "
+            "Could you enter it again?"
+        ),
+        "ask_phone": (
+            "Nice to meet you, {name}. "
+            "What's your phone number?"
+        ),
+        "invalid_phone": (
+            "That phone number doesn't seem valid. "
+            "Enter between 7 and 15 digits."
+        ),
+        "ask_date": (
+            "What date would you like for your appointment?"
+        ),
+        "no_available_dates": (
+            "There are currently no available dates. "
+            "Please try again later."
+        ),
+        "available_dates": (
+            "I have availability on the following dates: "
+            "{dates}. Which date would you prefer?"
+        ),
+        "invalid_date": (
+            "That date doesn't seem valid. "
+            "Enter it using the DD/MM/YYYY format "
+            "or ask which dates are available."
+        ),
+        "ask_time": (
+            "What time would you like the appointment?"
+        ),
+        "invalid_time": (
+            "That time doesn't seem valid. "
+            "Enter it using the HH:MM format."
+        ),
+        "confirmation_summary": (
+            "Here are your appointment details:\n\n"
+            "Name: {name}\n"
+            "Phone: {phone}\n"
+            "Date: {date}\n"
+            "Time: {time}\n\n"
+            "Would you like to confirm the appointment? "
+            "Reply “yes” to confirm "
+            "or “no” to cancel."
+        ),
+        "confirmed": (
+            "Your appointment has been confirmed.\n\n"
+            "Name: {name}\n"
+            "Phone: {phone}\n"
+            "Date: {date}\n"
+            "Time: {time}"
+        ),
+        "cancelled": (
+            "The appointment request has been cancelled. "
+            "You can start another one whenever you want."
+        ),
+        "unknown_confirmation": (
+            "I didn't understand that response. "
+            "Reply “yes” to confirm "
+            "or “no” to cancel."
+        ),
+    },
 }
 
 
 class BookingCapability(BaseCapability):
+    """
+    Handle Spanish and English appointment booking conversations.
+
+    The conversation language is detected and persisted by
+    FlowForgeApplication before this capability is invoked.
+    """
+
     name = "booking"
-    version = "1.0"
+    version = "1.1"
     dependencies: list[str] = []
 
-    def register(self, context: dict[str, Any]) -> None:
+    def register(
+        self,
+        context: dict[str, Any],
+    ) -> None:
         context.setdefault("flows", [])
         context.setdefault("actions", [])
 
-        context["flows"].append("booking_flow")
+        if "booking_flow" not in context["flows"]:
+            context["flows"].append("booking_flow")
 
     def can_handle(
         self,
@@ -62,7 +244,8 @@ class BookingCapability(BaseCapability):
 
         return any(
             keyword in text
-            for keyword in _BOOKING_KEYWORDS
+            for language_keywords in _BOOKING_KEYWORDS.values()
+            for keyword in language_keywords
         )
 
     def handle(
@@ -81,8 +264,11 @@ class BookingCapability(BaseCapability):
             return handler(context, message)
 
         return self._response(
-            context,
-            "La reserva ya está confirmada.",
+            context=context,
+            text=self._text(
+                context,
+                "already_confirmed",
+            ),
         )
 
     def _start_booking(
@@ -92,10 +278,10 @@ class BookingCapability(BaseCapability):
         context.booking = BookingState()
 
         return self._response(
-            context,
-            (
-                "Perfecto. Vamos a reservar una cita. "
-                "¿Cómo te llamas?"
+            context=context,
+            text=self._text(
+                context,
+                "start",
             ),
         )
 
@@ -108,20 +294,21 @@ class BookingCapability(BaseCapability):
 
         if not self._is_valid_name(name):
             return self._response(
-                context,
-                (
-                    "Ese nombre no parece válido. "
-                    "¿Puedes escribirlo de nuevo?"
+                context=context,
+                text=self._text(
+                    context,
+                    "invalid_name",
                 ),
             )
 
         context.booking.name = name
 
         return self._response(
-            context,
-            (
-                f"Encantado, {context.booking.name}. "
-                "¿Cuál es tu número de teléfono?"
+            context=context,
+            text=self._text(
+                context,
+                "ask_phone",
+                name=name,
             ),
         )
 
@@ -134,18 +321,21 @@ class BookingCapability(BaseCapability):
 
         if not self._is_valid_phone(phone):
             return self._response(
-                context,
-                (
-                    "El teléfono no parece válido. "
-                    "Escribe únicamente entre 7 y 15 dígitos."
+                context=context,
+                text=self._text(
+                    context,
+                    "invalid_phone",
                 ),
             )
 
         context.booking.phone = phone
 
         return self._response(
-            context,
-            "¿Para qué día quieres la cita?",
+            context=context,
+            text=self._text(
+                context,
+                "ask_date",
+            ),
         )
 
     def _handle_date(
@@ -160,39 +350,39 @@ class BookingCapability(BaseCapability):
 
             if not available_dates:
                 return self._response(
-                    context,
-                    (
-                        "Ahora mismo no tengo fechas disponibles. "
-                        "Inténtalo de nuevo más adelante."
+                    context=context,
+                    text=self._text(
+                        context,
+                        "no_available_dates",
                     ),
                 )
 
-            formatted_dates = ", ".join(available_dates)
-
             return self._response(
-                context,
-                (
-                    "Tengo disponibilidad para los siguientes días: "
-                    f"{formatted_dates}. "
-                    "¿Qué día prefieres?"
+                context=context,
+                text=self._text(
+                    context,
+                    "available_dates",
+                    dates=", ".join(available_dates),
                 ),
             )
 
         if not self._is_valid_date(date):
             return self._response(
-                context,
-                (
-                    "La fecha no parece válida. "
-                    "Escríbela con el formato DD/MM/YYYY "
-                    "o pregúntame qué días hay disponibles."
+                context=context,
+                text=self._text(
+                    context,
+                    "invalid_date",
                 ),
             )
 
         context.booking.date = date
 
         return self._response(
-            context,
-            "¿A qué hora quieres la cita?",
+            context=context,
+            text=self._text(
+                context,
+                "ask_time",
+            ),
         )
 
     def _handle_time(
@@ -204,19 +394,19 @@ class BookingCapability(BaseCapability):
 
         if not self._is_valid_time(time):
             return self._response(
-                context,
-                (
-                    "La hora no parece válida. "
-                    "Escríbela con el formato HH:MM."
+                context=context,
+                text=self._text(
+                    context,
+                    "invalid_time",
                 ),
             )
 
         context.booking.time = time
 
         return self._response(
-            context,
-            self._build_confirmation_summary(
-                context.booking
+            context=context,
+            text=self._build_confirmation_summary(
+                context
             ),
         )
 
@@ -226,42 +416,45 @@ class BookingCapability(BaseCapability):
         message: str,
     ) -> Response:
         normalized = self._normalize_text(message)
+        language = self._get_language(context)
 
-        if normalized in _CONFIRMATION_WORDS:
+        if normalized in _CONFIRMATION_WORDS[language]:
             context.booking.confirm()
 
             return self._response(
-                context,
-                (
-                    "Reserva confirmada correctamente.\n\n"
-                    f"Nombre: {context.booking.name}\n"
-                    f"Teléfono: {context.booking.phone}\n"
-                    f"Fecha: {context.booking.date}\n"
-                    f"Hora: {context.booking.time}"
+                context=context,
+                text=self._text(
+                    context,
+                    "confirmed",
+                    name=context.booking.name,
+                    phone=context.booking.phone,
+                    date=context.booking.date,
+                    time=context.booking.time,
                 ),
             )
 
-        if normalized in _CANCELLATION_WORDS:
+        if normalized in _CANCELLATION_WORDS[language]:
             context.booking = None
+            context.clear_active_capability()
 
             return Response(
-                text=(
-                    "La solicitud de reserva ha sido cancelada. "
-                    "Puedes empezar otra cuando quieras."
+                text=self._text(
+                    context,
+                    "cancelled",
                 ),
                 metadata={
                     "capability": self.name,
                     "handled": True,
                     "booking_step": "cancelled",
+                    "language": language.value,
                 },
             )
 
         return self._response(
-            context,
-            (
-                "No he entendido la respuesta. "
-                "Escribe «sí» para confirmar "
-                "o «no» para cancelar."
+            context=context,
+            text=self._text(
+                context,
+                "unknown_confirmation",
             ),
         )
 
@@ -269,29 +462,34 @@ class BookingCapability(BaseCapability):
         self,
         step: BookingStep,
     ) -> Callable[[Any, str], Response] | None:
-        handlers = {
+        handlers: dict[
+            BookingStep,
+            Callable[[Any, str], Response],
+        ] = {
             BookingStep.NAME: self._handle_name,
             BookingStep.PHONE: self._handle_phone,
             BookingStep.DATE: self._handle_date,
             BookingStep.TIME: self._handle_time,
-            BookingStep.CONFIRMATION: self._handle_confirmation,
+            BookingStep.CONFIRMATION: (
+                self._handle_confirmation
+            ),
         }
 
         return handlers.get(step)
 
     def _build_confirmation_summary(
         self,
-        booking: BookingState,
+        context: Any,
     ) -> str:
-        return (
-            "Estos son los datos de tu reserva:\n\n"
-            f"Nombre: {booking.name}\n"
-            f"Teléfono: {booking.phone}\n"
-            f"Fecha: {booking.date}\n"
-            f"Hora: {booking.time}\n\n"
-            "¿Quieres confirmar la reserva? "
-            "Responde «sí» para confirmar "
-            "o «no» para cancelar."
+        booking = context.booking
+
+        return self._text(
+            context,
+            "confirmation_summary",
+            name=booking.name,
+            phone=booking.phone,
+            date=booking.date,
+            time=booking.time,
         )
 
     def _response(
@@ -299,6 +497,8 @@ class BookingCapability(BaseCapability):
         context: Any,
         text: str,
     ) -> Response:
+        language = self._get_language(context)
+
         booking_step = (
             context.booking.next_step.value
             if context.booking is not None
@@ -311,11 +511,42 @@ class BookingCapability(BaseCapability):
                 "capability": self.name,
                 "handled": True,
                 "booking_step": booking_step,
+                "language": language.value,
             },
         )
 
+    @classmethod
+    def _text(
+        cls,
+        context: Any,
+        key: str,
+        **values: Any,
+    ) -> str:
+        language = cls._get_language(context)
+
+        template = _TEXTS[language][key]
+
+        return template.format(**values)
+
     @staticmethod
-    def _is_valid_name(name: str) -> bool:
+    def _get_language(
+        context: Any,
+    ) -> Language:
+        language = getattr(
+            context,
+            "language",
+            None,
+        )
+
+        if language in _TEXTS:
+            return language
+
+        return Language.ES
+
+    @staticmethod
+    def _is_valid_name(
+        name: str,
+    ) -> bool:
         cleaned_name = name.strip()
 
         if len(cleaned_name) < 2:
@@ -327,7 +558,9 @@ class BookingCapability(BaseCapability):
         )
 
     @staticmethod
-    def _normalize_phone(phone: str) -> str:
+    def _normalize_phone(
+        phone: str,
+    ) -> str:
         return re.sub(
             r"[\s()+-]",
             "",
@@ -335,14 +568,18 @@ class BookingCapability(BaseCapability):
         )
 
     @staticmethod
-    def _is_valid_phone(phone: str) -> bool:
+    def _is_valid_phone(
+        phone: str,
+    ) -> bool:
         return (
             phone.isdigit()
             and 7 <= len(phone) <= 15
         )
 
     @staticmethod
-    def _is_valid_date(date: str) -> bool:
+    def _is_valid_date(
+        date: str,
+    ) -> bool:
         try:
             parsed_date = datetime.strptime(
                 date,
@@ -351,10 +588,15 @@ class BookingCapability(BaseCapability):
         except ValueError:
             return False
 
-        return parsed_date.date() >= datetime.now().date()
+        return (
+            parsed_date.date()
+            >= datetime.now().date()
+        )
 
     @staticmethod
-    def _is_valid_time(time: str) -> bool:
+    def _is_valid_time(
+        time: str,
+    ) -> bool:
         try:
             datetime.strptime(
                 time,
@@ -380,6 +622,13 @@ class BookingCapability(BaseCapability):
             "libres",
             "hueco",
             "huecos",
+            "available",
+            "availability",
+            "free",
+            "opening",
+            "openings",
+            "slot",
+            "slots",
         }
 
         date_words = {
@@ -387,9 +636,14 @@ class BookingCapability(BaseCapability):
             "dias",
             "fecha",
             "fechas",
+            "day",
+            "days",
+            "date",
+            "dates",
         }
 
         question_patterns = (
+            # Spanish
             "que dias hay",
             "que fechas hay",
             "que dias tienes",
@@ -406,6 +660,23 @@ class BookingCapability(BaseCapability):
             "mostrar fechas",
             "ver dias",
             "ver fechas",
+
+            # English
+            "what days are available",
+            "what dates are available",
+            "which days are available",
+            "which dates are available",
+            "what days do you have",
+            "what dates do you have",
+            "when are you available",
+            "when can i book",
+            "when can i come",
+            "show available dates",
+            "show me the dates",
+            "show me available dates",
+            "do you have availability",
+            "any available dates",
+            "available appointments",
         )
 
         words = set(normalized.split())
@@ -429,6 +700,12 @@ class BookingCapability(BaseCapability):
                 "cuales ",
                 "dime ",
                 "cuando ",
+                "what ",
+                "which ",
+                "when ",
+                "show ",
+                "do ",
+                "are ",
             )
         )
 
@@ -442,7 +719,9 @@ class BookingCapability(BaseCapability):
         )
 
     @staticmethod
-    def _normalize_text(message: str) -> str:
+    def _normalize_text(
+        message: str,
+    ) -> str:
         normalized = unicodedata.normalize(
             "NFKD",
             message,
@@ -468,7 +747,15 @@ class BookingCapability(BaseCapability):
             normalized,
         ).strip()
 
-    def _get_available_dates(self) -> list[str]:
+    def _get_available_dates(
+        self,
+    ) -> list[str]:
+        """
+        Temporary availability source.
+
+        Google Calendar will replace this hardcoded implementation.
+        """
+
         return [
             "28/07/2026",
             "29/07/2026",
