@@ -7,29 +7,31 @@ from chatbot.activation import ActivationConfig
 
 
 @dataclass(slots=True)
-class Instance:
+class InstanceDefinition:
     """
-    Fully resolved description of a FlowForge assistant.
+    Client-specific FlowForge configuration.
 
-    An Instance contains the final configuration produced after combining
-    a business template with a client's specific configuration.
-
-    Runtime objects are created later by Bootstrap.
+    An InstanceDefinition references a reusable business template and
+    declares only the values that differ for a particular client.
     """
 
     id: str
     name: str
+    template_id: str
 
-    template_id: str | None = None
-
-    default_language: str = "es"
-    supported_languages: list[str] = field(
-        default_factory=lambda: ["es"]
-    )
+    default_language: str | None = None
+    supported_languages: list[str] | None = None
 
     channels: list[str] = field(default_factory=list)
     capabilities: list[str] = field(default_factory=list)
+    disabled_capabilities: list[str] = field(
+        default_factory=list
+    )
+
     connectors: list[str] = field(default_factory=list)
+    disabled_connectors: list[str] = field(
+        default_factory=list
+    )
 
     knowledge_path: str | None = None
 
@@ -41,6 +43,4 @@ class Instance:
         default_factory=dict
     )
 
-    activation: ActivationConfig = field(
-        default_factory=ActivationConfig
-    )
+    activation: ActivationConfig | None = None

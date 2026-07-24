@@ -7,20 +7,17 @@ from chatbot.activation import ActivationConfig
 
 
 @dataclass(slots=True)
-class Instance:
+class TemplateDefinition:
     """
-    Fully resolved description of a FlowForge assistant.
+    Reusable configuration for a type of business.
 
-    An Instance contains the final configuration produced after combining
-    a business template with a client's specific configuration.
-
-    Runtime objects are created later by Bootstrap.
+    A template defines the common defaults shared by assistants belonging
+    to the same business category, such as tarot readers, dental clinics
+    or hotels.
     """
 
     id: str
     name: str
-
-    template_id: str | None = None
 
     default_language: str = "es"
     supported_languages: list[str] = field(
