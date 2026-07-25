@@ -1,35 +1,26 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-
 from chatbot.booking.models import Booking
 from chatbot.booking.repository import BookingRepository
 from chatbot.booking.state import BookingState
-from chatbot.calendar import CalendarProvider
+from chatbot.calendar import CalendarService
 
 
 class BookingService:
     """
     Coordinate booking-related business operations.
 
-    The calendar provider is optional so the booking domain can still be
-    used without an external calendar integration.
+    Booking persistence belongs to this service, while calendar-specific
+    operations are delegated to CalendarService.
     """
 
     def __init__(
         self,
         repository: BookingRepository,
-        calendar_provider: CalendarProvider | None = None,
-        duration_minutes: int = 60,
+        calendar_service: CalendarService | None = None,
     ) -> None:
-        if duration_minutes <= 0:
-            raise ValueError(
-                "Booking duration must be greater than zero."
-            )
-
         self._repository = repository
-        self._calendar_provider = calendar_provider
-        self._duration_minutes = duration_minutes
+        self._calendar_service = calendar_service
 
     def create_booking(
         self,
@@ -48,11 +39,10 @@ class BookingService:
         state: BookingState,
     ) -> Booking:
         """
-        Build and persist a booking from completed conversation state.
+        Build and persist a booking from confirmed conversation state.
 
-        When a calendar provider is configured, availability is checked
-        before the booking is persisted and a corresponding calendar event
-        is created.
+        When calendar integration is enabled, the external event is
+        created before the local booking is persisted.
         """
 
         if not state.is_complete:
@@ -79,13 +69,20 @@ class BookingService:
             ),
         )
 
-        self._create_calendar_booking(
-            booking
+        calendar_booking_id = (
+            self._create_calendar_booking(
+                booking
+            )
         )
 
         self.create_booking(
             booking
         )
+
+        if calendar_booking_id is not None:
+            state.confirm(
+                booking_id=calendar_booking_id
+            )
 
         return booking
 
@@ -94,31 +91,15 @@ class BookingService:
         booking: Booking,
     ) -> str | None:
         """
-        Create the external calendar event when integration is enabled.
+        Create an external calendar event when integration is enabled.
         """
 
-        if self._calendar_provider is None:
+        if self._calendar_service is None:
             return None
 
-        start = self._parse_start_datetime(
-            booking
-        )
-
-        end = start + timedelta(
-            minutes=self._duration_minutes
-        )
-
-        if not self._calendar_provider.is_available(
-            start=start,
-            end=end,
-        ):
-            raise ValueError(
-                "Requested booking time is not available."
-            )
-
-        return self._calendar_provider.create_booking(
-            start=start,
-            end=end,
+        return self._calendar_service.create_booking(
+            date=booking.date,
+            time=booking.time,
             title=f"Booking - {booking.name}",
             description=(
                 f"Client: {booking.name}\n"
@@ -131,32 +112,6 @@ class BookingService:
                 "booking_time": booking.time,
             },
         )
-
-    @staticmethod
-    def _parse_start_datetime(
-        booking: Booking,
-    ) -> datetime:
-        """
-        Convert the booking date and time strings to a datetime.
-
-        The current booking conversation uses the Spanish date format
-        DD/MM/YYYY and a 24-hour HH:MM time.
-        """
-
-        raw_datetime = (
-            f"{booking.date} {booking.time}"
-        )
-
-        try:
-            return datetime.strptime(
-                raw_datetime,
-                "%d/%m/%Y %H:%M",
-            )
-        except ValueError as exc:
-            raise ValueError(
-                "Booking date and time must use "
-                "DD/MM/YYYY and HH:MM formats."
-            ) from exc
 
     @staticmethod
     def _require_value(

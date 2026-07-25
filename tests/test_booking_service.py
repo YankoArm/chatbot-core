@@ -6,7 +6,10 @@ from chatbot.booking.models import Booking
 from chatbot.booking.repository import BookingRepository
 from chatbot.booking.service import BookingService
 from chatbot.booking.state import BookingState
-from chatbot.calendar import InMemoryCalendarProvider
+from chatbot.calendar import (
+    CalendarService,
+    InMemoryCalendarProvider,
+)
 
 class FakeBookingRepository(BookingRepository):
 
@@ -76,18 +79,24 @@ def test_booking_service_creates_booking_from_state():
 
 def test_booking_service_creates_calendar_event():
     repository = FakeBookingRepository()
-    calendar = InMemoryCalendarProvider()
+    calendar_provider = InMemoryCalendarProvider()
+
+    calendar_service = CalendarService(
+        provider=calendar_provider
+    )
 
     service = BookingService(
         repository=repository,
-        calendar_provider=calendar,
+        calendar_service=calendar_service,
     )
+
+    state = make_complete_state()
 
     booking = service.create_booking_from_state(
-        make_complete_state()
+        state
     )
 
-    bookings = calendar.list_bookings(
+    bookings = calendar_provider.list_bookings(
         start=datetime(
             2026,
             7,
@@ -131,12 +140,13 @@ def test_booking_service_creates_calendar_event():
         "client_phone"
     ] == "600123123"
 
+    assert state.booking_id == bookings[0]["id"]
 
 def test_booking_service_rejects_unavailable_time():
     repository = FakeBookingRepository()
-    calendar = InMemoryCalendarProvider()
+    calendar_provider = InMemoryCalendarProvider()
 
-    calendar.create_booking(
+    calendar_provider.create_booking(
         start=datetime(
             2026,
             7,
@@ -154,37 +164,47 @@ def test_booking_service_rejects_unavailable_time():
         title="Existing booking",
     )
 
+    calendar_service = CalendarService(
+        provider=calendar_provider
+    )
+
     service = BookingService(
         repository=repository,
-        calendar_provider=calendar,
+        calendar_service=calendar_service,
     )
+
+    state = make_complete_state()
 
     with pytest.raises(
         ValueError,
         match="not available",
     ):
         service.create_booking_from_state(
-            make_complete_state()
+            state
         )
 
     assert repository.saved_booking is None
-
+    assert state.booking_id is None
 
 def test_booking_service_uses_configured_duration():
     repository = FakeBookingRepository()
-    calendar = InMemoryCalendarProvider()
+    calendar_provider = InMemoryCalendarProvider()
+
+    calendar_service = CalendarService(
+        provider=calendar_provider,
+        default_duration_minutes=30,
+    )
 
     service = BookingService(
         repository=repository,
-        calendar_provider=calendar,
-        duration_minutes=30,
+        calendar_service=calendar_service,
     )
 
     service.create_booking_from_state(
         make_complete_state()
     )
 
-    bookings = calendar.list_bookings(
+    bookings = calendar_provider.list_bookings(
         start=datetime(
             2026,
             7,
@@ -217,30 +237,20 @@ def test_booking_service_uses_configured_duration():
         0,
     )
 
-
-def test_booking_service_rejects_invalid_duration():
-    repository = FakeBookingRepository()
-
-    with pytest.raises(
-        ValueError,
-        match="duration must be greater than zero",
-    ):
-        BookingService(
-            repository=repository,
-            duration_minutes=0,
-        )
-
-
 def test_booking_service_rejects_invalid_datetime_format():
     repository = FakeBookingRepository()
-    calendar = InMemoryCalendarProvider()
+    calendar_provider = InMemoryCalendarProvider()
+
+    calendar_service = CalendarService(
+        provider=calendar_provider
+    )
 
     state = make_complete_state()
     state.date = "2026-07-25"
 
     service = BookingService(
         repository=repository,
-        calendar_provider=calendar,
+        calendar_service=calendar_service,
     )
 
     with pytest.raises(
@@ -250,3 +260,5 @@ def test_booking_service_rejects_invalid_datetime_format():
         service.create_booking_from_state(
             state
         )
+
+    assert repository.saved_booking is None
