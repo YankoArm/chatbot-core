@@ -26,6 +26,8 @@ class ConversationContext:
     language: Language | None = None
     booking: BookingState | None = None
 
+    knowledge_service: Any | None = None
+
     previous_capabilities: list[str] = field(
         default_factory=list
     )

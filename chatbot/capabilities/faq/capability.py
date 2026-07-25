@@ -112,6 +112,7 @@ class FAQCapability(BaseCapability):
         answer = self._find_answer(
             context=context,
             message=message,
+            language=language,
         )
 
         return Response(
@@ -128,32 +129,39 @@ class FAQCapability(BaseCapability):
         self,
         context: Any,
         message: str,
+        language: Language,
     ) -> str | None:
         """
-        Find the most suitable FAQ answer from context variables.
+        Find the most suitable FAQ answer from the configured
+        KnowledgeService.
 
-        Expected structure:
+        The conversation context is expected to expose:
 
-        context.variables = {
-            "faq": {
+            context.knowledge_service
+
+        FAQ section structure:
+
+            {
                 "prices": {
-                    "keywords": ["precio", "precios", "cuanto cuesta"],
-                    "answer": "Las sesiones cuestan 40 €."
+                    "keywords": ["precio", "cuanto cuesta"],
+                    "answers": {
+                        "es": "Las sesiones cuestan 40 €.",
+                        "en": "Sessions cost €40."
+                    }
                 }
             }
-        }
         """
 
-        variables = getattr(
+        knowledge_service = getattr(
             context,
-            "variables",
-            {},
+            "knowledge_service",
+            None,
         )
 
-        if not isinstance(variables, dict):
+        if knowledge_service is None:
             return None
 
-        faq_entries = variables.get(
+        faq_entries = knowledge_service.get_section(
             "faq",
             {},
         )
@@ -173,14 +181,16 @@ class FAQCapability(BaseCapability):
                 "keywords",
                 [],
             )
-            answer = entry.get(
-                "answer",
+
+            answers = entry.get(
+                "answers",
+                {},
             )
 
             if not isinstance(keywords, list):
                 continue
 
-            if not isinstance(answer, str):
+            if not isinstance(answers, dict):
                 continue
 
             normalized_keywords = (
@@ -189,11 +199,20 @@ class FAQCapability(BaseCapability):
                 if isinstance(keyword, str)
             )
 
-            if any(
+            matches = any(
                 keyword
                 and keyword in normalized_message
                 for keyword in normalized_keywords
-            ):
+            )
+
+            if not matches:
+                continue
+
+            answer = answers.get(
+                language.value
+            )
+
+            if isinstance(answer, str) and answer.strip():
                 return answer
 
         return None

@@ -1,0 +1,73 @@
+{
+  "prices": {
+    "keywords": [
+      "precio",
+      "precios",
+      "cuanto cuesta",
+      "cuanto vale",
+      "tarifa",
+      "tarifas",
+      "price",
+      "prices",
+      "how much",
+      "cost"
+    ],
+    "answers": {
+      "es": "El precio de las sesiones todavía no está configurado.",
+      "en": "Session pricing has not been configured yet."
+    }
+  },
+  "services": {
+    "keywords": [
+      "servicio",
+      "servicios",
+      "sesion",
+      "sesiones",
+      "que ofreces",
+      "que haces",
+      "service",
+      "services",
+      "session",
+      "sessions",
+      "what do you offer"
+    ],
+    "answers": {
+      "es": "Tarot Alvin ofrece sesiones de tarot personalizadas. Próximamente añadiremos aquí la información detallada de cada modalidad.",
+      "en": "Tarot Alvin offers personalized tarot sessions. Detailed information about each session type will be added here soon."
+    }
+  },
+  "booking": {
+    "keywords": [
+      "reservar",
+      "reserva",
+      "cita",
+      "pedir cita",
+      "como reservo",
+      "booking",
+      "book",
+      "appointment",
+      "how do i book"
+    ],
+    "answers": {
+      "es": "Puedes iniciar una reserva escribiendo «quiero reservar» o «quiero pedir una cita».",
+      "en": "You can start a booking by writing “I want to book” or “I need an appointment”."
+    }
+  },
+  "payment": {
+    "keywords": [
+      "forma de pago",
+      "formas de pago",
+      "metodo de pago",
+      "metodos de pago",
+      "como se paga",
+      "payment",
+      "payment method",
+      "payment methods",
+      "how can i pay"
+    ],
+    "answers": {
+      "es": "Las formas de pago todavía no están configuradas.",
+      "en": "Payment methods have not been configured yet."
+    }
+  }
+}

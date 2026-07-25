@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from chatbot.activation import ActivationFactory
 from chatbot.application.application import FlowForgeApplication
 from chatbot.capabilities.capability_manager import CapabilityManager
 from chatbot.conversation import (
+    ConversationContextFactory,
     ConversationOrchestrator,
     ConversationStore,
 )
@@ -15,6 +17,7 @@ from chatbot.instances import (
     InstanceResolver,
     TemplateDefinition,
 )
+from chatbot.knowledge import KnowledgeServiceFactory
 from chatbot.language import (
     BaseLanguageDetector,
     RuleBasedLanguageDetector,
@@ -31,7 +34,7 @@ class Bootstrap:
 
     Bootstrap is the application's composition root. It creates and connects
     infrastructure components, capabilities, conversation services, activation
-    services and language detection.
+    services, knowledge services and language detection.
 
     It can build an application from either:
 
@@ -47,22 +50,36 @@ class Bootstrap:
         language_detector: BaseLanguageDetector | None = None,
         activation_factory: ActivationFactory | None = None,
         instance_resolver: InstanceResolver | None = None,
+        knowledge_service_factory: (
+            KnowledgeServiceFactory | None
+        ) = None,
+        knowledge_root: str | Path = "knowledge",
     ) -> None:
         self._capability_registry = (
             capability_registry
             or DefaultCapabilityRegistry()
         )
+
         self._language_detector = (
             language_detector
             or RuleBasedLanguageDetector()
         )
+
         self._activation_factory = (
             activation_factory
             or ActivationFactory()
         )
+
         self._instance_resolver = (
             instance_resolver
             or InstanceResolver()
+        )
+
+        self._knowledge_service_factory = (
+            knowledge_service_factory
+            or KnowledgeServiceFactory(
+                knowledge_root=knowledge_root,
+            )
         )
 
     def build(
@@ -74,6 +91,7 @@ class Bootstrap:
         activation_manager: Any | None = None,
         connector_manager: Any | None = None,
         language_detector: BaseLanguageDetector | None = None,
+        context_factory: ConversationContextFactory | None = None,
     ) -> FlowForgeApplication:
         """
         Build an application from prepared runtime components.
@@ -88,9 +106,15 @@ class Bootstrap:
             language_detector
             or self._language_detector
         )
+
         selected_conversation_store = (
             conversation_store
             or ConversationStore()
+        )
+
+        selected_context_factory = (
+            context_factory
+            or self._build_context_factory()
         )
 
         return FlowForgeApplication(
@@ -101,6 +125,7 @@ class Bootstrap:
             activation_manager=activation_manager,
             connector_manager=connector_manager,
             language_detector=selected_language_detector,
+            context_factory=selected_context_factory,
         )
 
     def build_from_instance(
@@ -113,8 +138,8 @@ class Bootstrap:
         """
         Build a complete application from a resolved Instance.
 
-        Capabilities, orchestration, activation and language detection are
-        created and connected automatically.
+        Capabilities, orchestration, activation, knowledge access and language
+        detection are created and connected automatically.
         """
 
         self._validate_instance(instance)
@@ -122,12 +147,16 @@ class Bootstrap:
         capability_manager = self._build_capability_manager(
             instance
         )
+
         orchestrator = ConversationOrchestrator(
             capability_manager=capability_manager,
         )
+
         activation_manager = self._build_activation_manager(
             instance
         )
+
+        context_factory = self._build_context_factory()
 
         return self.build(
             instance=instance,
@@ -137,6 +166,7 @@ class Bootstrap:
             activation_manager=activation_manager,
             connector_manager=connector_manager,
             language_detector=language_detector,
+            context_factory=context_factory,
         )
 
     def build_from_definition(
@@ -211,6 +241,22 @@ class Bootstrap:
 
         return self._activation_factory.create(
             instance.activation
+        )
+
+    def _build_context_factory(
+        self,
+    ) -> ConversationContextFactory:
+        """
+        Create the conversation context factory.
+
+        The factory assigns each conversation the knowledge service belonging
+        to its active FlowForge instance.
+        """
+
+        return ConversationContextFactory(
+            knowledge_service_factory=(
+                self._knowledge_service_factory
+            ),
         )
 
     @staticmethod

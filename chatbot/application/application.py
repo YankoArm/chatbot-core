@@ -4,8 +4,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from chatbot.activation import ActivationManager
-from chatbot.capabilities.capability_manager import CapabilityManager
+from chatbot.capabilities.capability_manager import (
+    CapabilityManager,
+)
 from chatbot.conversation import (
+    ConversationContextFactory,
     ConversationOrchestrator,
     ConversationStore,
 )
@@ -23,9 +26,9 @@ class FlowForgeApplication:
     Runtime representation of a configured FlowForge instance.
 
     The application acts as the main entry point for every conversation
-    channel. It obtains the session context, selects the conversation
-    language, evaluates activation rules and delegates message processing
-    to the conversation orchestrator.
+    channel. It obtains the session context, attaches instance-specific
+    services, selects the conversation language, evaluates activation rules
+    and delegates message processing to the conversation orchestrator.
     """
 
     instance: Instance
@@ -36,6 +39,7 @@ class FlowForgeApplication:
     activation_manager: ActivationManager | None = None
     connector_manager: Any | None = None
     language_detector: BaseLanguageDetector | None = None
+    context_factory: ConversationContextFactory | None = None
 
     def chat(
         self,
@@ -47,6 +51,9 @@ class FlowForgeApplication:
 
         The detected language is persisted in the conversation context and
         reused during the remainder of the session.
+
+        Instance-specific services, such as the knowledge service, are
+        attached to the context before conversational processing begins.
         """
 
         normalized_session_id = session_id.strip()
@@ -60,6 +67,11 @@ class FlowForgeApplication:
 
         context = self.conversation_store.get(
             normalized_session_id
+        )
+
+        self._ensure_context_services(
+            context=context,
+            session_id=normalized_session_id,
         )
 
         self._ensure_conversation_language(
@@ -127,6 +139,9 @@ class FlowForgeApplication:
             "language_detection": (
                 self.language_detector is not None
             ),
+            "knowledge_enabled": (
+                self.context_factory is not None
+            ),
             "capabilities": [
                 capability.name
                 for capability
@@ -136,6 +151,45 @@ class FlowForgeApplication:
                 self.conversation_store.count()
             ),
         }
+
+    def _ensure_context_services(
+        self,
+        context: Any,
+        session_id: str,
+    ) -> None:
+        """
+        Attach instance-specific runtime services to a context.
+
+        ConversationStore remains responsible for preserving conversation
+        state. ConversationContextFactory supplies services that depend on
+        the active client instance, such as KnowledgeService.
+
+        At the current application boundary, no independent user identifier
+        is received. The session identifier is therefore used as the
+        temporary user identifier when creating the service-bearing context.
+        """
+
+        if self.context_factory is None:
+            return
+
+        current_knowledge_service = getattr(
+            context,
+            "knowledge_service",
+            None,
+        )
+
+        if current_knowledge_service is not None:
+            return
+
+        prepared_context = self.context_factory.build(
+            instance=self.instance,
+            session_id=session_id,
+            user_id=session_id,
+        )
+
+        context.knowledge_service = (
+            prepared_context.knowledge_service
+        )
 
     def _ensure_conversation_language(
         self,
