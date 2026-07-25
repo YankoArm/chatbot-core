@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
 from chatbot.activation import ActivationFactory
 from chatbot.application.application import FlowForgeApplication
+from chatbot.capabilities.base_capability import BaseCapability
 from chatbot.capabilities.capability_manager import CapabilityManager
 from chatbot.conversation import (
     ConversationContextFactory,
@@ -28,6 +30,9 @@ from chatbot.registry import (
 )
 
 
+CapabilityFactory = Callable[[], BaseCapability]
+
+
 class Bootstrap:
     """
     Build fully configured FlowForge application runtimes.
@@ -35,6 +40,9 @@ class Bootstrap:
     Bootstrap is the application's composition root. It creates and connects
     infrastructure components, capabilities, conversation services, activation
     services, knowledge services and language detection.
+
+    Capability factories may be supplied to inject dependencies into selected
+    capabilities without coupling Bootstrap to concrete business services.
 
     It can build an application from either:
 
@@ -52,6 +60,9 @@ class Bootstrap:
         instance_resolver: InstanceResolver | None = None,
         knowledge_service_factory: (
             KnowledgeServiceFactory | None
+        ) = None,
+        capability_factories: (
+            Mapping[str, CapabilityFactory] | None
         ) = None,
         knowledge_root: str | Path = "knowledge",
     ) -> None:
@@ -80,6 +91,10 @@ class Bootstrap:
             or KnowledgeServiceFactory(
                 knowledge_root=knowledge_root,
             )
+        )
+
+        self._capability_factories = self._normalize_capability_factories(
+            capability_factories
         )
 
     def build(
@@ -222,7 +237,7 @@ class Bootstrap:
                     f"{normalized_name!r}."
                 )
 
-            capability = self._capability_registry.create(
+            capability = self._create_capability(
                 normalized_name
             )
 
@@ -230,6 +245,46 @@ class Bootstrap:
             registered_names.add(normalized_name)
 
         return capability_manager
+
+    def _create_capability(
+        self,
+        capability_name: str,
+    ) -> BaseCapability:
+        """
+        Create a capability using an injected factory when available.
+
+        Capabilities without a custom factory continue to be created through
+        the configured capability registry.
+        """
+
+        capability_factory = self._capability_factories.get(
+            capability_name
+        )
+
+        if capability_factory is None:
+            return self._capability_registry.create(
+                capability_name
+            )
+
+        capability = capability_factory()
+
+        if not isinstance(
+            capability,
+            BaseCapability,
+        ):
+            raise TypeError(
+                "Capability factory must return a BaseCapability "
+                f"instance for {capability_name!r}."
+            )
+
+        if capability.name != capability_name:
+            raise ValueError(
+                "Capability factory returned an unexpected capability: "
+                f"expected {capability_name!r}, "
+                f"received {capability.name!r}."
+            )
+
+        return capability
 
     def _build_activation_manager(
         self,
@@ -258,6 +313,52 @@ class Bootstrap:
                 self._knowledge_service_factory
             ),
         )
+
+    @staticmethod
+    def _normalize_capability_factories(
+        capability_factories: (
+            Mapping[str, CapabilityFactory] | None
+        ),
+    ) -> dict[str, CapabilityFactory]:
+        """
+        Validate and normalize injected capability factories.
+        """
+
+        if capability_factories is None:
+            return {}
+
+        normalized_factories: dict[
+            str,
+            CapabilityFactory,
+        ] = {}
+
+        for capability_name, capability_factory in (
+            capability_factories.items()
+        ):
+            normalized_name = capability_name.strip()
+
+            if not normalized_name:
+                raise ValueError(
+                    "Capability factory names cannot be empty."
+                )
+
+            if not callable(capability_factory):
+                raise TypeError(
+                    "Capability factory must be callable for "
+                    f"{normalized_name!r}."
+                )
+
+            if normalized_name in normalized_factories:
+                raise ValueError(
+                    "Duplicate capability factory configured for "
+                    f"{normalized_name!r}."
+                )
+
+            normalized_factories[
+                normalized_name
+            ] = capability_factory
+
+        return normalized_factories
 
     @staticmethod
     def _validate_instance(

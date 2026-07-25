@@ -5,7 +5,11 @@ import unicodedata
 from datetime import datetime
 from typing import Any, Callable
 
-from chatbot.booking import BookingState, BookingStep
+from chatbot.booking import (
+    BookingService,
+    BookingState,
+    BookingStep,
+)
 from chatbot.capabilities.base_capability import BaseCapability
 from chatbot.language import Language
 from chatbot.responses import Response
@@ -225,6 +229,12 @@ class BookingCapability(BaseCapability):
     version = "1.1"
     dependencies: list[str] = []
 
+    def __init__(
+        self,
+        booking_service: BookingService | None = None,
+    ) -> None:
+        self._booking_service = booking_service
+
     def register(
         self,
         context: dict[str, Any],
@@ -419,18 +429,8 @@ class BookingCapability(BaseCapability):
         language = self._get_language(context)
 
         if normalized in _CONFIRMATION_WORDS[language]:
-            context.booking.confirm()
-
-            return self._response(
-                context=context,
-                text=self._text(
-                    context,
-                    "confirmed",
-                    name=context.booking.name,
-                    phone=context.booking.phone,
-                    date=context.booking.date,
-                    time=context.booking.time,
-                ),
+            return self._confirm_booking(
+                context
             )
 
         if normalized in _CANCELLATION_WORDS[language]:
@@ -455,6 +455,36 @@ class BookingCapability(BaseCapability):
             text=self._text(
                 context,
                 "unknown_confirmation",
+            ),
+        )
+
+    def _confirm_booking(
+        self,
+        context: Any,
+    ) -> Response:
+        booking = context.booking
+
+        if booking is None:
+            raise ValueError(
+                "Cannot confirm a missing booking state."
+            )
+
+        if self._booking_service is None:
+            booking.confirm()
+        else:
+            self._booking_service.create_booking_from_state(
+                booking
+            )
+
+        return self._response(
+            context=context,
+            text=self._text(
+                context,
+                "confirmed",
+                name=booking.name,
+                phone=booking.phone,
+                date=booking.date,
+                time=booking.time,
             ),
         )
 
