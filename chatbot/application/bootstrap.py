@@ -9,7 +9,12 @@ from chatbot.conversation import (
     ConversationOrchestrator,
     ConversationStore,
 )
-from chatbot.instances import Instance
+from chatbot.instances import (
+    Instance,
+    InstanceDefinition,
+    InstanceResolver,
+    TemplateDefinition,
+)
 from chatbot.language import (
     BaseLanguageDetector,
     RuleBasedLanguageDetector,
@@ -24,9 +29,14 @@ class Bootstrap:
     """
     Build fully configured FlowForge application runtimes.
 
-    Bootstrap acts as the composition root of the application. It creates and
-    connects infrastructure components, capability instances, conversation
-    services, activation services and language detection.
+    Bootstrap is the application's composition root. It creates and connects
+    infrastructure components, capabilities, conversation services, activation
+    services and language detection.
+
+    It can build an application from either:
+
+    - A fully resolved Instance.
+    - A TemplateDefinition combined with an InstanceDefinition.
 
     Business logic must not be implemented here.
     """
@@ -36,20 +46,23 @@ class Bootstrap:
         capability_registry: CapabilityRegistry | None = None,
         language_detector: BaseLanguageDetector | None = None,
         activation_factory: ActivationFactory | None = None,
+        instance_resolver: InstanceResolver | None = None,
     ) -> None:
         self._capability_registry = (
             capability_registry
             or DefaultCapabilityRegistry()
         )
-
         self._language_detector = (
             language_detector
             or RuleBasedLanguageDetector()
         )
-
         self._activation_factory = (
             activation_factory
             or ActivationFactory()
+        )
+        self._instance_resolver = (
+            instance_resolver
+            or InstanceResolver()
         )
 
     def build(
@@ -65,15 +78,16 @@ class Bootstrap:
         """
         Build an application from prepared runtime components.
 
-        This low-level method is useful for tests, custom deployments and
-        advanced integrations that need to supply their own runtime services.
+        This low-level method is intended for tests, custom deployments and
+        advanced integrations that supply their own runtime services.
         """
+
+        self._validate_instance(instance)
 
         selected_language_detector = (
             language_detector
             or self._language_detector
         )
-
         selected_conversation_store = (
             conversation_store
             or ConversationStore()
@@ -97,20 +111,20 @@ class Bootstrap:
         language_detector: BaseLanguageDetector | None = None,
     ) -> FlowForgeApplication:
         """
-        Build a complete application from a declarative Instance definition.
+        Build a complete application from a resolved Instance.
 
         Capabilities, orchestration, activation and language detection are
         created and connected automatically.
         """
 
+        self._validate_instance(instance)
+
         capability_manager = self._build_capability_manager(
             instance
         )
-
         orchestrator = ConversationOrchestrator(
             capability_manager=capability_manager,
         )
-
         activation_manager = self._build_activation_manager(
             instance
         )
@@ -125,6 +139,34 @@ class Bootstrap:
             language_detector=language_detector,
         )
 
+    def build_from_definition(
+        self,
+        template: TemplateDefinition,
+        definition: InstanceDefinition,
+        conversation_store: ConversationStore | None = None,
+        connector_manager: Any | None = None,
+        language_detector: BaseLanguageDetector | None = None,
+    ) -> FlowForgeApplication:
+        """
+        Resolve a template and client definition, then build the application.
+
+        This is the preferred entry point for client-specific deployments.
+        The resolver combines template defaults with instance overrides and
+        produces the final resolved Instance consumed by the runtime.
+        """
+
+        instance = self._instance_resolver.resolve(
+            template=template,
+            definition=definition,
+        )
+
+        return self.build_from_instance(
+            instance=instance,
+            conversation_store=conversation_store,
+            connector_manager=connector_manager,
+            language_detector=language_detector,
+        )
+
     def _build_capability_manager(
         self,
         instance: Instance,
@@ -134,7 +176,6 @@ class Bootstrap:
         """
 
         capability_manager = CapabilityManager()
-
         registered_names: set[str] = set()
 
         for capability_name in instance.capabilities:
@@ -171,3 +212,26 @@ class Bootstrap:
         return self._activation_factory.create(
             instance.activation
         )
+
+    @staticmethod
+    def _validate_instance(
+        instance: Instance,
+    ) -> None:
+        """
+        Validate the minimum data required to build a runtime.
+        """
+
+        if not isinstance(instance, Instance):
+            raise TypeError(
+                "Bootstrap requires a resolved Instance object."
+            )
+
+        if not instance.id.strip():
+            raise ValueError(
+                "Instance id cannot be empty."
+            )
+
+        if not instance.name.strip():
+            raise ValueError(
+                "Instance name cannot be empty."
+            )

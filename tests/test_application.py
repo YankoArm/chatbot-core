@@ -2,20 +2,29 @@ from chatbot.application import Bootstrap
 from chatbot.capabilities.booking.capability import BookingCapability
 from chatbot.capabilities.capability_manager import CapabilityManager
 from chatbot.conversation import ConversationOrchestrator
-
+from chatbot.instances import Instance
+from chatbot.capabilities.booking import BookingCapability
 
 def build_test_app():
-    manager = CapabilityManager()
-    manager.register(BookingCapability())
-
-    orchestrator = ConversationOrchestrator(manager)
-
-    return Bootstrap().build(
-        instance="test_instance",
-        orchestrator=orchestrator,
-        capability_manager=manager,
+    instance = Instance(
+        id="test_instance",
+        name="Test Assistant",
     )
 
+    capability_manager = CapabilityManager()
+    capability_manager.register(
+        BookingCapability()
+    )
+
+    orchestrator = ConversationOrchestrator(
+        capability_manager=capability_manager,
+    )
+
+    return Bootstrap().build(
+        instance=instance,
+        orchestrator=orchestrator,
+        capability_manager=capability_manager,
+    )
 
 def test_application_chat_returns_response():
     app = build_test_app()
@@ -49,7 +58,7 @@ def test_application_info_returns_runtime_data():
 
     info = app.info()
 
-    assert info["instance"] == "test_instance"
+    assert info["instance"] == "Test Assistant"
     assert info["capabilities"] == ["booking"]
     assert info["active_sessions"] == 0
 
