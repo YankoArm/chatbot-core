@@ -79,6 +79,14 @@ class PhoneNumberService:
                 "Phone number cannot be empty."
             )
 
+        if any(
+            character.isalpha()
+            for character in raw_value
+        ):
+            raise InvalidPhoneNumberError(
+                "Phone number cannot contain letters."
+            )
+
         selected_region = self._resolve_region(
             raw_value,
             region,

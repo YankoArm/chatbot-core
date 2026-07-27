@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 import re
+
+from chatbot.phone import (
+    PhoneNumberError,
+    PhoneNumberService,
+)
+
 import unicodedata
 from datetime import datetime
 from typing import Any, Callable
@@ -92,11 +98,13 @@ _TEXTS = {
         ),
         "ask_phone": (
             "Encantado, {name}. "
-            "¿Cuál es tu número de teléfono?"
+            "¿Cuál es tu número de teléfono? "
+            "Puedes incluir el prefijo internacional, "
+            "por ejemplo +34."
         ),
         "invalid_phone": (
             "El teléfono no parece válido. "
-            "Escribe únicamente entre 7 y 15 dígitos."
+            "Comprueba el número y su prefijo internacional."
         ),
         "ask_date": "¿Para qué día quieres la cita?",
         "no_available_dates": (
@@ -158,11 +166,13 @@ _TEXTS = {
         ),
         "ask_phone": (
             "Nice to meet you, {name}. "
-            "What's your phone number?"
+            "What's your phone number? "
+            "You may include the international prefix, "
+            "for example +34."
         ),
         "invalid_phone": (
             "That phone number doesn't seem valid. "
-            "Enter between 7 and 15 digits."
+            "Check the number and its international prefix."
         ),
         "ask_date": (
             "What date would you like for your appointment?"
@@ -232,8 +242,15 @@ class BookingCapability(BaseCapability):
     def __init__(
         self,
         booking_service: BookingService | None = None,
+        phone_service: PhoneNumberService | None = None,
     ) -> None:
         self._booking_service = booking_service
+        self._phone_service = (
+            phone_service
+            or PhoneNumberService(
+                default_region="ES",
+            )
+        )
 
     def register(
         self,
@@ -327,9 +344,11 @@ class BookingCapability(BaseCapability):
         context: Any,
         message: str,
     ) -> Response:
-        phone = self._normalize_phone(message)
-
-        if not self._is_valid_phone(phone):
+        try:
+            phone = self._phone_service.parse(
+                message,
+            )
+        except PhoneNumberError:
             return self._response(
                 context=context,
                 text=self._text(
@@ -338,7 +357,7 @@ class BookingCapability(BaseCapability):
                 ),
             )
 
-        context.booking.phone = phone
+        context.booking.phone = phone.e164
 
         return self._response(
             context=context,
@@ -585,25 +604,6 @@ class BookingCapability(BaseCapability):
         return any(
             character.isalpha()
             for character in cleaned_name
-        )
-
-    @staticmethod
-    def _normalize_phone(
-        phone: str,
-    ) -> str:
-        return re.sub(
-            r"[\s()+-]",
-            "",
-            phone.strip(),
-        )
-
-    @staticmethod
-    def _is_valid_phone(
-        phone: str,
-    ) -> bool:
-        return (
-            phone.isdigit()
-            and 7 <= len(phone) <= 15
         )
 
     @staticmethod

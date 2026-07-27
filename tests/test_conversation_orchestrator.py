@@ -59,7 +59,10 @@ def test_orchestrator_continues_active_booking_flow():
     assert context.booking is not None
     assert context.booking.name == "Yanko"
     assert response.text == (
-        "Encantado, Yanko. ¿Cuál es tu número de teléfono?"
+        "Encantado, Yanko. "
+        "¿Cuál es tu número de teléfono? "
+        "Puedes incluir el prefijo internacional, "
+        "por ejemplo +34."
     )
     assert response.metadata["capability"] == "booking"
     assert response.metadata["handled"] is True

@@ -75,9 +75,10 @@ def test_booking_capability_stores_name_and_requests_phone() -> None:
 
     assert response.text == (
         "Encantado, Yanko. "
-        "¿Cuál es tu número de teléfono?"
+        "¿Cuál es tu número de teléfono? "
+        "Puedes incluir el prefijo internacional, "
+        "por ejemplo +34."
     )
-
 
 def test_booking_capability_stores_phone_and_requests_date() -> None:
     capability = BookingCapability()
@@ -94,7 +95,7 @@ def test_booking_capability_stores_phone_and_requests_date() -> None:
         message="600123123",
     )
 
-    assert context.booking.phone == "600123123"
+    assert context.booking.phone == "+34600123123"
     assert context.booking.next_step is BookingStep.DATE
     assert response.text == "¿Para qué día quieres la cita?"
 
@@ -172,9 +173,8 @@ def test_booking_capability_does_not_advance_with_invalid_phone() -> None:
 
     assert response.text == (
         "El teléfono no parece válido. "
-        "Escribe únicamente entre 7 y 15 dígitos."
+        "Comprueba el número y su prefijo internacional."
     )
-
 
 def test_booking_capability_does_not_advance_with_invalid_name() -> None:
     capability = BookingCapability()
