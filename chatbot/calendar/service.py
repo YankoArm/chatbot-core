@@ -5,6 +5,13 @@ from typing import Any
 
 from chatbot.calendar.provider import CalendarProvider
 
+from datetime import datetime
+from typing import Any
+
+from chatbot.availability import BusyPeriod
+from chatbot.calendar.availability_adapter import (
+    CalendarAvailabilityAdapter,
+)
 
 class CalendarService:
     """
@@ -22,6 +29,9 @@ class CalendarService:
         self,
         provider: CalendarProvider,
         default_duration_minutes: int = 60,
+        availability_adapter: (
+            CalendarAvailabilityAdapter | None
+        ) = None,
     ) -> None:
         if default_duration_minutes <= 0:
             raise ValueError(
@@ -31,6 +41,10 @@ class CalendarService:
         self._provider = provider
         self._default_duration_minutes = (
             default_duration_minutes
+        )
+        self._availability_adapter = (
+            availability_adapter
+            or CalendarAvailabilityAdapter()
         )
 
     def is_available(
@@ -197,3 +211,49 @@ class CalendarService:
             )
 
         return duration
+
+    def get_busy_periods(
+        self,
+        start: datetime,
+        end: datetime,
+    ) -> tuple[BusyPeriod, ...]:
+        self._validate_aware_window(
+            start,
+            end,
+        )
+
+        events = self._provider.list_bookings(
+            start=start,
+            end=end,
+        )
+
+        return (
+            self._availability_adapter
+            .events_to_busy_periods(events)
+        )
+
+    @staticmethod
+    def _validate_aware_window(
+        start: datetime,
+        end: datetime,
+    ) -> None:
+        values = (
+            start,
+            end,
+        )
+
+        if any(
+            value.tzinfo is None
+            or value.utcoffset() is None
+            for value in values
+        ):
+            raise ValueError(
+                "Calendar window datetimes must be "
+                "timezone-aware."
+            )
+
+        if end <= start:
+            raise ValueError(
+                "Calendar window end must be later "
+                "than start."
+            )

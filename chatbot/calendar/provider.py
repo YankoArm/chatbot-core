@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
@@ -10,7 +11,7 @@ class CalendarProvider(ABC):
     Abstract calendar integration used by booking services.
 
     Concrete providers may connect FlowForge to Google Calendar,
-    Microsoft Outlook, CalDAV or an in-memory test implementation.
+    Microsoft Outlook, CalDAV, or an in-memory test implementation.
     """
 
     @abstractmethod
@@ -60,9 +61,12 @@ class CalendarProvider(ABC):
         *,
         start: datetime,
         end: datetime,
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[Mapping[str, Any], ...]:
         """
-        Return bookings within the requested time range.
+        Return calendar bookings within the requested time range.
+
+        The returned mappings must include the event start and end
+        values required by CalendarAvailabilityAdapter.
         """
 
         raise NotImplementedError
