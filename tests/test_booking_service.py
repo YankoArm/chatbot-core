@@ -76,6 +76,32 @@ def test_booking_service_creates_booking_from_state():
         time="16:30",
     )
 
+def test_booking_service_confirms_state_after_creation():
+    repository = FakeBookingRepository()
+
+    service = BookingService(
+        repository
+    )
+
+    state = BookingState(
+        name="Yanko",
+        phone="600123123",
+        date="25/07/2026",
+        time="16:30",
+    )
+
+    assert state.has_required_data is True
+    assert state.confirmed is False
+    assert state.is_complete is False
+
+    booking = service.create_booking_from_state(
+        state
+    )
+
+    assert repository.saved_booking == booking
+    assert state.confirmed is True
+    assert state.is_complete is True
+    assert state.booking_id is None
 
 def test_booking_service_creates_calendar_event():
     repository = FakeBookingRepository()

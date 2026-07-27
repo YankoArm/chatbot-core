@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 from chatbot.application import Bootstrap
+from chatbot.booking import (
+    BookingService,
+    InMemoryBookingRepository,
+)
+from chatbot.capabilities.booking import (
+    BookingCapability,
+)
 from chatbot.channels import (
     ApplicationChannel,
     CLIChannel,
 )
 from chatbot.instances import Instance
+from run_google_calendar import (
+    build_calendar_service,
+)
 
 
 def main() -> None:
@@ -18,10 +28,28 @@ def main() -> None:
         name="FlowForge Demo",
         capabilities=[
             "greeting",
+            "booking",
         ],
     )
 
-    bootstrap = Bootstrap()
+    calendar_service = build_calendar_service()
+
+    booking_repository = (
+        InMemoryBookingRepository()
+    )
+
+    booking_service = BookingService(
+        repository=booking_repository,
+        calendar_service=calendar_service,
+    )
+
+    bootstrap = Bootstrap(
+        capability_factories={
+            "booking": lambda: BookingCapability(
+                booking_service=booking_service,
+            ),
+        },
+    )
 
     application = bootstrap.build_from_instance(
         instance,
@@ -38,7 +66,12 @@ def main() -> None:
     print("=" * 50)
     print(" FlowForge CLI")
     print("=" * 50)
-    print("Type 'exit', 'quit' or 'salir' to close.")
+    print(
+        "Google Calendar integration enabled."
+    )
+    print(
+        "Type 'exit', 'quit' or 'salir' to close."
+    )
     print()
 
     cli.run()

@@ -101,24 +101,27 @@ def test_booking_capability_stores_phone_and_requests_date() -> None:
 
 def test_booking_capability_stores_date_and_requests_time() -> None:
     capability = BookingCapability()
-    context = ConversationContext(session_id="user_1")
+    context = ConversationContext(
+        session_id="user_1"
+    )
 
     context.booking = BookingState(
         name="Yanko",
         phone="600123123",
     )
 
-    context.set_active_capability("booking")
+    context.set_active_capability(
+        "booking"
+    )
 
     response = capability.handle(
         context=context,
-        message="25/07/2026",
+        message="25/07/2099",
     )
 
-    assert context.booking.date == "25/07/2026"
+    assert context.booking.date == "25/07/2099"
     assert context.booking.next_step is BookingStep.TIME
     assert response.text == "¿A qué hora quieres la cita?"
-
 
 def test_booking_capability_moves_to_confirmation_after_time() -> None:
     capability = BookingCapability()

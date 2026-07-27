@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from chatbot.calendar.provider import CalendarProvider
-
+from zoneinfo import ZoneInfo
 
 class GoogleCalendarProvider(CalendarProvider):
     """
@@ -40,6 +40,15 @@ class GoogleCalendarProvider(CalendarProvider):
                 "Google Calendar timezone cannot be empty."
             )
 
+        try:
+            timezone_info = ZoneInfo(
+                normalized_timezone
+            )
+        except Exception as exc:
+            raise ValueError(
+                "Google Calendar timezone is invalid."
+            ) from exc
+
         allowed_send_updates = {
             "all",
             "externalOnly",
@@ -55,6 +64,7 @@ class GoogleCalendarProvider(CalendarProvider):
         self._service = service
         self._calendar_id = normalized_calendar_id
         self._timezone = normalized_timezone
+        self._timezone_info = timezone_info
         self._send_updates = send_updates
 
     def is_available(
@@ -382,11 +392,25 @@ class GoogleCalendarProvider(CalendarProvider):
             if value is not None
         }
 
-    @staticmethod
     def _to_google_datetime(
+        self,
         value: datetime,
     ) -> str:
-        return value.isoformat()
+        """
+        Convert a datetime into an RFC 3339 value accepted by Google.
+
+        Naive datetime values are interpreted using the provider timezone.
+        Aware datetime values preserve their original timezone information.
+        """
+
+        normalized_value = value
+
+        if normalized_value.tzinfo is None:
+            normalized_value = normalized_value.replace(
+                tzinfo=self._timezone_info
+            )
+
+        return normalized_value.isoformat()
 
     @staticmethod
     def _parse_google_datetime(

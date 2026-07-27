@@ -286,12 +286,12 @@ def test_google_provider_creates_booking(
     assert body["description"] == "Client: Yanko"
 
     assert body["start"] == {
-        "dateTime": "2026-07-28T16:30:00",
+        "dateTime": "2026-07-28T16:30:00+02:00",
         "timeZone": "Europe/Madrid",
     }
 
     assert body["end"] == {
-        "dateTime": "2026-07-28T17:30:00",
+        "dateTime": "2026-07-28T17:30:00+02:00",
         "timeZone": "Europe/Madrid",
     }
 
@@ -517,10 +517,11 @@ def test_google_provider_lists_bookings(
 
     assert call["calendarId"] == "primary"
     assert call["timeMin"] == (
-        "2026-07-28T00:00:00"
+        "2026-07-28T00:00:00+02:00"
     )
+
     assert call["timeMax"] == (
-        "2026-07-29T00:00:00"
+        "2026-07-29T00:00:00+02:00"
     )
     assert call["singleEvents"] is True
     assert call["orderBy"] == "startTime"

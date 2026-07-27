@@ -39,13 +39,13 @@ class BookingService:
         state: BookingState,
     ) -> Booking:
         """
-        Build and persist a booking from confirmed conversation state.
+        Build and persist a booking from complete conversation state.
 
         When calendar integration is enabled, the external event is
         created before the local booking is persisted.
         """
 
-        if not state.is_complete:
+        if not state.has_required_data:
             raise ValueError(
                 "Cannot create a booking from incomplete state."
             )
@@ -79,10 +79,9 @@ class BookingService:
             booking
         )
 
-        if calendar_booking_id is not None:
-            state.confirm(
-                booking_id=calendar_booking_id
-            )
+        state.confirm(
+            booking_id=calendar_booking_id
+        )
 
         return booking
 
