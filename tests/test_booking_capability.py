@@ -1,13 +1,21 @@
 import pytest
 
-from chatbot.booking import BookingState, BookingStep
+from chatbot.booking import BookingSlotUnavailableError, BookingState, BookingStep
 from chatbot.capabilities.booking import BookingCapability
 from chatbot.conversation.context import ConversationContext
 
+from datetime import time
+
+from chatbot.availability import (
+    BookingRules,
+    BusinessHours,
+)
 
 class FakeBookingService:
     def __init__(self) -> None:
         self.received_state: BookingState | None = None
+        self.raise_slot_unavailable = False
+        self.available_slots = ()
 
     def create_booking_from_state(
         self,
@@ -19,10 +27,22 @@ class FakeBookingService:
     ) -> None:
         self.received_state = state
 
+        if self.raise_slot_unavailable:
+            raise BookingSlotUnavailableError()
+
         state.confirm(
             booking_id="booking-123",
         )
 
+    def get_available_slots_for_date(
+        self,
+        target_date,
+        *,
+        business_hours=None,
+        rules=None,
+        now=None,
+    ):
+        return self.available_slots
 
 def test_booking_capability_confirms_booking_through_service() -> None:
     booking_service = FakeBookingService()
@@ -374,3 +394,90 @@ def test_booking_capability_keeps_confirmation_step_for_unknown_answer() -> None
     assert context.booking.next_step is BookingStep.CONFIRMATION
     assert "sí" in response.text.lower()
     assert "no" in response.text.lower()
+
+def test_booking_capability_requests_new_time_when_slot_becomes_unavailable() -> None:
+    booking_service = FakeBookingService()
+    booking_service.raise_slot_unavailable = True
+
+    booking_service.available_slots = (
+        type(
+            "Slot",
+            (),
+            {
+                "start": type(
+                    "Start",
+                    (),
+                    {
+                        "strftime": lambda self, fmt: "15:30",
+                    },
+                )(),
+            },
+        )(),
+        type(
+            "Slot",
+            (),
+            {
+                "start": type(
+                    "Start",
+                    (),
+                    {
+                        "strftime": lambda self, fmt: "17:00",
+                    },
+                )(),
+            },
+        )(),
+    )
+
+    business_hours = BusinessHours.standard_week(
+        start=time(9, 0),
+        end=time(18, 0),
+        timezone_name="Europe/Madrid",
+    )
+
+    booking_rules = BookingRules.hourly(
+        slot_interval_minutes=30,
+    )
+
+    capability = BookingCapability(
+        booking_service=booking_service,
+        business_hours=business_hours,
+        booking_rules=booking_rules,
+    )
+
+    context = ConversationContext(
+        session_id="user_1",
+    )
+
+    context.booking = BookingState(
+        name="Yanko",
+        phone="600123123",
+        date="28/07/2026",
+        time="16:30",
+    )
+
+    context.booking.available_times = (
+        "15:30",
+        "17:00",
+    )
+
+    context.set_active_capability(
+        "booking",
+    )
+
+    response = capability.handle(
+        context=context,
+        message="sí",
+    )
+
+    assert booking_service.received_state is context.booking
+
+    assert context.booking.confirmed is False
+    assert context.booking.booking_id is None
+
+    assert context.booking.time is None
+    assert context.booking.date == "28/07/2026"
+
+    assert context.booking.next_step is BookingStep.TIME
+
+    assert "15:30" in response.text
+    assert "17:00" in response.text
