@@ -12,6 +12,10 @@ class FakeBookingService:
     def create_booking_from_state(
         self,
         state: BookingState,
+        *,
+        business_hours=None,
+        rules=None,
+        now=None,
     ) -> None:
         self.received_state = state
 
@@ -56,7 +60,6 @@ def test_booking_capability_confirms_booking_through_service() -> None:
     assert response.metadata["handled"] is True
     assert response.metadata["booking_step"] == "complete"
     assert "Reserva confirmada correctamente" in response.text
-
 
 def test_booking_capability_stores_name_and_requests_phone() -> None:
     capability = BookingCapability()

@@ -22,7 +22,8 @@ class BookingState:
     """
     Runtime state of an ongoing booking conversation.
 
-    The state contains both the information collected from the user
+    The state contains both the information collected from the user,
+    the available times offered during the conversation,
     and the identifiers generated when the booking is confirmed.
     """
 
@@ -30,6 +31,8 @@ class BookingState:
     phone: str | None = None
     date: str | None = None
     time: str | None = None
+
+    available_times: tuple[str, ...] = ()
 
     confirmed: bool = False
     notes: str | None = None
@@ -109,6 +112,7 @@ class BookingState:
         self.phone = None
         self.date = None
         self.time = None
+        self.available_times = ()
         self.confirmed = False
         self.notes = None
         self.booking_id = None

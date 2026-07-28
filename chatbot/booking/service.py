@@ -1,9 +1,23 @@
 from __future__ import annotations
 
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
+
+from chatbot.availability import (
+    BookingRules,
+    BusinessHours,
+    TimeSlot,
+)
 from chatbot.booking.models import Booking
 from chatbot.booking.repository import BookingRepository
 from chatbot.booking.state import BookingState
 from chatbot.calendar import CalendarService
+
+
+class BookingSlotUnavailableError(Exception):
+    """
+    Raised when the selected booking slot is no longer available.
+    """
 
 
 class BookingService:
@@ -37,17 +51,37 @@ class BookingService:
     def create_booking_from_state(
         self,
         state: BookingState,
+        *,
+        business_hours: BusinessHours | None = None,
+        rules: BookingRules | None = None,
+        now: datetime | None = None,
     ) -> Booking:
         """
         Build and persist a booking from complete conversation state.
 
-        When calendar integration is enabled, the external event is
-        created before the local booking is persisted.
+        When calendar integration and availability configuration are
+        enabled, the selected time is checked again immediately before
+        creating the external event.
+
+        The external calendar event is created before the local booking
+        is persisted.
         """
 
         if not state.has_required_data:
             raise ValueError(
                 "Cannot create a booking from incomplete state."
+            )
+
+        if (
+            self._calendar_service is not None
+            and business_hours is not None
+            and rules is not None
+        ):
+            self._ensure_slot_is_available(
+                state,
+                business_hours=business_hours,
+                rules=rules,
+                now=now,
             )
 
         booking = Booking(
@@ -83,7 +117,95 @@ class BookingService:
             booking_id=calendar_booking_id
         )
 
+        state.available_times = ()
+
         return booking
+
+    def get_available_slots_for_date(
+        self,
+        target_date: date,
+        *,
+        business_hours: BusinessHours,
+        rules: BookingRules,
+        now: datetime,
+    ) -> tuple[TimeSlot, ...]:
+        """
+        Return available booking slots for a date.
+
+        Calendar availability is delegated to CalendarService.
+        """
+
+        if self._calendar_service is None:
+            return ()
+
+        return (
+            self._calendar_service
+            .get_available_slots_for_date(
+                target_date,
+                business_hours=business_hours,
+                rules=rules,
+                now=now,
+            )
+        )
+
+    def _ensure_slot_is_available(
+        self,
+        state: BookingState,
+        *,
+        business_hours: BusinessHours,
+        rules: BookingRules,
+        now: datetime | None = None,
+    ) -> None:
+        """
+        Check that the selected conversation slot is still available.
+
+        Availability is recalculated immediately before the external
+        calendar event is created to reduce double-booking risks.
+        """
+
+        date_value = self._require_value(
+            state.date,
+            "date",
+        )
+
+        time_value = self._require_value(
+            state.time,
+            "time",
+        )
+
+        target_date = datetime.strptime(
+            date_value,
+            "%d/%m/%Y",
+        ).date()
+
+        timezone = ZoneInfo(
+            business_hours.timezone_name
+        )
+
+        current_time = (
+            now
+            if now is not None
+            else datetime.now(timezone)
+        )
+
+        available_slots = (
+            self.get_available_slots_for_date(
+                target_date,
+                business_hours=business_hours,
+                rules=rules,
+                now=current_time,
+            )
+        )
+
+        available_times = {
+            slot.start.strftime("%H:%M")
+            for slot in available_slots
+        }
+
+        if time_value not in available_times:
+            raise BookingSlotUnavailableError(
+                "The selected booking slot is no longer available."
+            )
 
     def _create_calendar_booking(
         self,
@@ -117,6 +239,12 @@ class BookingService:
         value: str | None,
         field_name: str,
     ) -> str:
+        """
+        Return a normalized required value.
+
+        Raise ValueError when the value is missing or empty.
+        """
+
         if value is None:
             raise ValueError(
                 f"Booking field '{field_name}' is required."

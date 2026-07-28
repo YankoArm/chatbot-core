@@ -7,12 +7,20 @@ from chatbot.phone import (
     PhoneNumberService,
 )
 
+from zoneinfo import ZoneInfo
+
+from chatbot.availability import (
+    BookingRules,
+    BusinessHours,
+)
+
 import unicodedata
 from datetime import datetime
 from typing import Any, Callable
 
 from chatbot.booking import (
     BookingService,
+    BookingSlotUnavailableError,
     BookingState,
     BookingStep,
 )
@@ -151,6 +159,19 @@ _TEXTS = {
             "Escribe «sí» para confirmar "
             "o «no» para cancelar."
         ),
+        "available_times": (
+            "Tengo disponibles estas horas: "
+            "{times}. ¿Cuál prefieres?"
+        ),
+        "no_available_times": (
+            "No quedan horas disponibles para ese día. "
+            "Prueba con otra fecha."
+        ),
+        "selected_time_unavailable": (
+            "Lo siento, esa hora acaba de dejar de estar disponible. "
+            "Ahora tengo libres estas horas: {times}. "
+            "Elige otra hora."
+        ),
     },
     Language.EN: {
         "already_confirmed": (
@@ -223,6 +244,19 @@ _TEXTS = {
             "Reply “yes” to confirm "
             "or “no” to cancel."
         ),
+        "available_times": (
+            "These times are available: "
+            "{times}. Which one would you prefer?"
+        ),
+        "no_available_times": (
+            "There are no available times left for that date. "
+            "Please choose another date."
+        ),
+        "selected_time_unavailable": (
+            "Sorry, that time has just become unavailable. "
+            "These times are still available: {times}. "
+            "Please choose another time."
+        ),
     },
 }
 
@@ -243,8 +277,13 @@ class BookingCapability(BaseCapability):
         self,
         booking_service: BookingService | None = None,
         phone_service: PhoneNumberService | None = None,
+        business_hours: BusinessHours | None = None,
+        booking_rules: BookingRules | None = None,
     ) -> None:
         self._booking_service = booking_service
+        self._business_hours = business_hours
+        self._booking_rules = booking_rules
+
         self._phone_service = (
             phone_service
             or PhoneNumberService(
@@ -406,11 +445,37 @@ class BookingCapability(BaseCapability):
 
         context.booking.date = date
 
+        available_times = self._get_available_times(
+            date)
+
+        if available_times is None:
+            return self._response(
+                context=context,
+                text=self._text(
+                    context,
+                    "ask_time",
+                ),
+            )
+
+        if not available_times:
+            context.booking.date = None
+
+            return self._response(
+                context=context,
+                text=self._text(
+                    context,
+                    "no_available_times",
+                ),
+            )
+
+        context.booking.available_times = available_times
+
         return self._response(
             context=context,
             text=self._text(
                 context,
-                "ask_time",
+                "available_times",
+                times=", ".join(available_times),
             ),
         )
 
@@ -427,6 +492,20 @@ class BookingCapability(BaseCapability):
                 text=self._text(
                     context,
                     "invalid_time",
+                ),
+            )
+
+        available_times = context.booking.available_times
+
+        if (
+            available_times
+            and time not in available_times
+        ):
+            return self._response(
+                context=context,
+                text=self._text(
+                    context,
+                    "invalid_available_time",
                 ),
             )
 
@@ -490,10 +569,52 @@ class BookingCapability(BaseCapability):
 
         if self._booking_service is None:
             booking.confirm()
+            booking.available_times = ()
         else:
-            self._booking_service.create_booking_from_state(
-                booking
-            )
+            try:
+                self._booking_service.create_booking_from_state(
+                    booking,
+                    business_hours=self._business_hours,
+                    rules=self._booking_rules,
+                )
+            except BookingSlotUnavailableError:
+                date_value = booking.date
+
+                if date_value is None:
+                    raise ValueError(
+                        "Cannot recalculate availability without a booking date."
+                    )
+
+                available_times = self._get_available_times(
+                    date_value
+                )
+
+                booking.time = None
+
+                if not available_times:
+                    booking.date = None
+                    booking.available_times = ()
+
+                    return self._response(
+                        context=context,
+                        text=self._text(
+                            context,
+                            "no_available_times",
+                        ),
+                    )
+
+                booking.available_times = available_times
+
+                return self._response(
+                    context=context,
+                    text=self._text(
+                        context,
+                        "selected_time_unavailable",
+                        times=", ".join(
+                            available_times
+                        ),
+                    ),
+                )
 
         return self._response(
             context=context,
@@ -791,3 +912,45 @@ class BookingCapability(BaseCapability):
             "29/07/2026",
             "30/07/2026",
         ]
+
+    def _get_available_times(
+        self,
+        date_value: str,
+    ) -> tuple[str, ...] | None:
+        """
+        Return formatted available times when availability
+        integration is configured.
+
+        None means that availability integration is disabled.
+        """
+
+        if (
+            self._booking_service is None
+            or self._business_hours is None
+            or self._booking_rules is None
+        ):
+            return None
+
+        target_date = datetime.strptime(
+            date_value,
+            "%d/%m/%Y",
+        ).date()
+
+        timezone = ZoneInfo(
+            self._business_hours.timezone_name
+        )
+
+        slots = (
+            self._booking_service
+            .get_available_slots_for_date(
+                target_date,
+                business_hours=self._business_hours,
+                rules=self._booking_rules,
+                now=datetime.now(timezone),
+            )
+        )
+
+        return tuple(
+            slot.start.strftime("%H:%M")
+            for slot in slots
+        )

@@ -1,17 +1,21 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
-from chatbot.calendar.provider import CalendarProvider
-
-from datetime import datetime
-from typing import Any
-
-from chatbot.availability import BusyPeriod
+from chatbot.availability import (
+    AvailabilityService,
+    BusyPeriod,
+    BookingRules,
+    BusinessHours,
+    TimeSlot,
+)
 from chatbot.calendar.availability_adapter import (
     CalendarAvailabilityAdapter,
 )
+from chatbot.calendar.provider import CalendarProvider
+
+from zoneinfo import ZoneInfo
 
 class CalendarService:
     """
@@ -32,6 +36,9 @@ class CalendarService:
         availability_adapter: (
             CalendarAvailabilityAdapter | None
         ) = None,
+        availability_service: (
+            AvailabilityService | None
+        ) = None,
     ) -> None:
         if default_duration_minutes <= 0:
             raise ValueError(
@@ -45,6 +52,10 @@ class CalendarService:
         self._availability_adapter = (
             availability_adapter
             or CalendarAvailabilityAdapter()
+        )
+        self._availability_service = (
+            availability_service
+            or AvailabilityService()
         )
 
     def is_available(
@@ -232,6 +243,58 @@ class CalendarService:
             .events_to_busy_periods(events)
         )
 
+    def get_available_slots_for_date(
+        self,
+        target_date: date,
+        *,
+        business_hours: BusinessHours,
+        rules: BookingRules,
+        now: datetime,
+    ) -> tuple[TimeSlot, ...]:
+        """
+        Return available booking slots for a date,
+        including existing calendar bookings.
+        """
+
+        working_ranges = business_hours.hours_for_date(
+            target_date
+        )
+
+        if not working_ranges:
+            return ()
+
+        timezone = ZoneInfo(
+            business_hours.timezone_name
+        )
+
+        window_start = datetime.combine(
+            target_date,
+            working_ranges[0].start,
+            tzinfo=timezone,
+        )
+
+        window_end = datetime.combine(
+            target_date,
+            working_ranges[-1].end,
+            tzinfo=timezone,
+        )
+
+        busy_periods = self.get_busy_periods(
+            window_start,
+            window_end,
+        )
+
+        return (
+            self._availability_service
+            .get_available_slots_for_date(
+                target_date,
+                business_hours=business_hours,
+                rules=rules,
+                busy_periods=busy_periods,
+                now=now,
+            )
+        )
+
     @staticmethod
     def _validate_aware_window(
         start: datetime,
@@ -257,3 +320,5 @@ class CalendarService:
                 "Calendar window end must be later "
                 "than start."
             )
+
+    

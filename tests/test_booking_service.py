@@ -1,6 +1,14 @@
-from datetime import datetime
+from datetime import date, datetime, timezone
 
 import pytest
+
+from unittest.mock import Mock
+
+from chatbot.availability import (
+    BookingRules,
+    BusinessHours,
+    TimeSlot,
+)
 
 from chatbot.booking.models import Booking
 from chatbot.booking.repository import BookingRepository
@@ -288,3 +296,88 @@ def test_booking_service_rejects_invalid_datetime_format():
         )
 
     assert repository.saved_booking is None
+
+def test_get_available_slots_for_date_delegates_to_calendar_service(
+) -> None:
+    repository = FakeBookingRepository()
+    calendar_service = Mock()
+
+    business_hours = Mock(spec=BusinessHours)
+    rules = Mock(spec=BookingRules)
+
+    now = datetime(
+        2026,
+        7,
+        27,
+        10,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    target_date = date(
+        2026,
+        7,
+        28,
+    )
+
+    expected_slots = (
+        Mock(spec=TimeSlot),
+        Mock(spec=TimeSlot),
+    )
+
+    calendar_service.get_available_slots_for_date.return_value = (
+        expected_slots
+    )
+
+    service = BookingService(
+        repository=repository,
+        calendar_service=calendar_service,
+    )
+
+    result = service.get_available_slots_for_date(
+        target_date,
+        business_hours=business_hours,
+        rules=rules,
+        now=now,
+    )
+
+    assert result == expected_slots
+
+    calendar_service.get_available_slots_for_date.assert_called_once_with(
+        target_date,
+        business_hours=business_hours,
+        rules=rules,
+        now=now,
+    )
+
+def test_get_available_slots_for_date_returns_empty_without_calendar(
+) -> None:
+    repository = FakeBookingRepository()
+
+    service = BookingService(
+        repository=repository,
+    )
+
+    result = service.get_available_slots_for_date(
+        date(
+            2026,
+            7,
+            28,
+        ),
+        business_hours=Mock(
+            spec=BusinessHours,
+        ),
+        rules=Mock(
+            spec=BookingRules,
+        ),
+        now=datetime(
+            2026,
+            7,
+            27,
+            10,
+            0,
+            tzinfo=timezone.utc,
+        ),
+    )
+
+    assert result == ()
