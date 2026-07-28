@@ -481,3 +481,63 @@ def test_booking_capability_requests_new_time_when_slot_becomes_unavailable() ->
 
     assert "15:30" in response.text
     assert "17:00" in response.text
+
+def test_booking_capability_requests_new_date_when_no_times_remain() -> None:
+    booking_service = FakeBookingService()
+    booking_service.raise_slot_unavailable = True
+
+    booking_service.available_slots = ()
+    business_hours = BusinessHours.standard_week(
+        start=time(9, 0),
+        end=time(18, 0),
+        timezone_name="Europe/Madrid",
+    )
+
+    booking_rules = BookingRules.hourly(
+        slot_interval_minutes=30,
+    )
+
+    capability = BookingCapability(
+        booking_service=booking_service,
+        business_hours=business_hours,
+        booking_rules=booking_rules,
+    )
+
+    context = ConversationContext(
+        session_id="user_1",
+    )
+
+    context.booking = BookingState(
+        name="Yanko",
+        phone="600123123",
+        date="28/07/2026",
+        time="16:30",
+    )
+
+    context.booking.available_times = (
+        "15:30",
+        "17:00",
+    )
+
+    context.set_active_capability(
+        "booking",
+    )
+
+    response = capability.handle(
+        context=context,
+        message="sí",
+    )
+
+    assert booking_service.received_state is context.booking
+
+    assert context.booking.confirmed is False
+    assert context.booking.booking_id is None
+
+    assert context.booking.time is None
+    assert context.booking.date is None
+
+    assert context.booking.available_times == ()
+
+    assert context.booking.next_step is BookingStep.DATE
+
+    assert "No quedan horas disponibles" in response.text
