@@ -1,28 +1,34 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
+from unittest.mock import Mock
+from zoneinfo import ZoneInfo
 
 import pytest
-
-from unittest.mock import Mock
 
 from chatbot.availability import (
     BookingRules,
     BusinessHours,
     TimeSlot,
 )
-
 from chatbot.booking.models import Booking
 from chatbot.booking.repository import BookingRepository
-from chatbot.booking.service import BookingService
+from chatbot.booking.service import (
+    BookingService,
+    BookingSlotUnavailableError,
+)
 from chatbot.booking.state import BookingState
 from chatbot.calendar import (
     CalendarService,
     InMemoryCalendarProvider,
 )
 
+
+MADRID = ZoneInfo("Europe/Madrid")
+
+
 class FakeBookingRepository(BookingRepository):
 
-    def __init__(self):
-        self.saved_booking = None
+    def __init__(self) -> None:
+        self.saved_booking: Booking | None = None
 
     def save(
         self,
@@ -43,11 +49,74 @@ def make_complete_state() -> BookingState:
 
     return state
 
-def test_booking_service_saves_booking():
+
+def make_unconfirmed_state(
+    *,
+    booking_date: str = "27/07/2026",
+    booking_time: str = "16:30",
+) -> BookingState:
+    return BookingState(
+        name="Yanko",
+        phone="600123123",
+        date=booking_date,
+        time=booking_time,
+    )
+
+
+def make_business_hours() -> BusinessHours:
+    return BusinessHours.standard_week(
+        start=time(9, 0),
+        end=time(18, 0),
+        timezone_name="Europe/Madrid",
+    )
+
+
+def make_booking_rules() -> BookingRules:
+    return BookingRules.hourly(
+        slot_interval_minutes=30,
+    )
+
+
+def make_now() -> datetime:
+    return datetime(
+        2026,
+        7,
+        27,
+        8,
+        0,
+        tzinfo=MADRID,
+    )
+
+
+def make_available_slot(
+    *,
+    hour: int = 16,
+    minute: int = 30,
+) -> TimeSlot:
+    start = datetime(
+        2026,
+        7,
+        27,
+        hour,
+        minute,
+        tzinfo=MADRID,
+    )
+
+    end = start + make_booking_rules().appointment_duration
+
+    return TimeSlot(
+        start=start,
+        end=end,
+        occupied_start=start,
+        occupied_end=end,
+    )
+
+
+def test_booking_service_saves_booking() -> None:
     repository = FakeBookingRepository()
 
     service = BookingService(
-        repository
+        repository,
     )
 
     booking = Booking(
@@ -58,21 +127,21 @@ def test_booking_service_saves_booking():
     )
 
     service.create_booking(
-        booking
+        booking,
     )
 
     assert repository.saved_booking == booking
 
 
-def test_booking_service_creates_booking_from_state():
+def test_booking_service_creates_booking_from_state() -> None:
     repository = FakeBookingRepository()
 
     service = BookingService(
-        repository
+        repository,
     )
 
     booking = service.create_booking_from_state(
-        make_complete_state()
+        make_complete_state(),
     )
 
     assert repository.saved_booking == booking
@@ -84,11 +153,12 @@ def test_booking_service_creates_booking_from_state():
         time="16:30",
     )
 
-def test_booking_service_confirms_state_after_creation():
+
+def test_booking_service_confirms_state_after_creation() -> None:
     repository = FakeBookingRepository()
 
     service = BookingService(
-        repository
+        repository,
     )
 
     state = BookingState(
@@ -103,7 +173,7 @@ def test_booking_service_confirms_state_after_creation():
     assert state.is_complete is False
 
     booking = service.create_booking_from_state(
-        state
+        state,
     )
 
     assert repository.saved_booking == booking
@@ -111,12 +181,13 @@ def test_booking_service_confirms_state_after_creation():
     assert state.is_complete is True
     assert state.booking_id is None
 
-def test_booking_service_creates_calendar_event():
+
+def test_booking_service_creates_calendar_event() -> None:
     repository = FakeBookingRepository()
     calendar_provider = InMemoryCalendarProvider()
 
     calendar_service = CalendarService(
-        provider=calendar_provider
+        provider=calendar_provider,
     )
 
     service = BookingService(
@@ -127,7 +198,7 @@ def test_booking_service_creates_calendar_event():
     state = make_complete_state()
 
     booking = service.create_booking_from_state(
-        state
+        state,
     )
 
     bookings = calendar_provider.list_bookings(
@@ -176,7 +247,116 @@ def test_booking_service_creates_calendar_event():
 
     assert state.booking_id == bookings[0]["id"]
 
-def test_booking_service_rejects_unavailable_time():
+
+def test_booking_service_creates_booking_when_slot_is_still_available(
+) -> None:
+    repository = FakeBookingRepository()
+    calendar_service = Mock(spec=CalendarService)
+
+    business_hours = make_business_hours()
+    rules = make_booking_rules()
+    now = make_now()
+
+    calendar_service.get_available_slots_for_date.return_value = (
+        make_available_slot(),
+    )
+
+    calendar_service.create_booking.return_value = (
+        "booking-123"
+    )
+
+    service = BookingService(
+        repository=repository,
+        calendar_service=calendar_service,
+    )
+
+    state = make_unconfirmed_state()
+
+    booking = service.create_booking_from_state(
+        state,
+        business_hours=business_hours,
+        rules=rules,
+        now=now,
+    )
+
+    assert repository.saved_booking == booking
+    assert state.confirmed is True
+    assert state.is_complete is True
+    assert state.booking_id == "booking-123"
+    assert state.available_times == ()
+
+    calendar_service.get_available_slots_for_date.assert_called_once_with(
+        date(
+            2026,
+            7,
+            27,
+        ),
+        business_hours=business_hours,
+        rules=rules,
+        now=now,
+    )
+
+    calendar_service.create_booking.assert_called_once()
+
+
+def test_booking_service_rejects_slot_that_became_unavailable(
+) -> None:
+    repository = FakeBookingRepository()
+    calendar_service = Mock(spec=CalendarService)
+
+    business_hours = make_business_hours()
+    rules = make_booking_rules()
+    now = make_now()
+
+    calendar_service.get_available_slots_for_date.return_value = (
+        make_available_slot(
+            hour=15,
+            minute=0,
+        ),
+    )
+
+    service = BookingService(
+        repository=repository,
+        calendar_service=calendar_service,
+    )
+
+    state = make_unconfirmed_state(
+        booking_time="16:30",
+    )
+
+    assert state.confirmed is False
+    assert state.booking_id is None
+
+    with pytest.raises(
+        BookingSlotUnavailableError,
+    ):
+        service.create_booking_from_state(
+            state,
+            business_hours=business_hours,
+            rules=rules,
+            now=now,
+        )
+
+    assert repository.saved_booking is None
+    assert state.confirmed is False
+    assert state.is_complete is False
+    assert state.booking_id is None
+
+    calendar_service.get_available_slots_for_date.assert_called_once_with(
+        date(
+            2026,
+            7,
+            27,
+        ),
+        business_hours=business_hours,
+        rules=rules,
+        now=now,
+    )
+
+    calendar_service.create_booking.assert_not_called()
+
+
+def test_booking_service_rejects_unavailable_time() -> None:
     repository = FakeBookingRepository()
     calendar_provider = InMemoryCalendarProvider()
 
@@ -199,7 +379,7 @@ def test_booking_service_rejects_unavailable_time():
     )
 
     calendar_service = CalendarService(
-        provider=calendar_provider
+        provider=calendar_provider,
     )
 
     service = BookingService(
@@ -214,13 +394,14 @@ def test_booking_service_rejects_unavailable_time():
         match="not available",
     ):
         service.create_booking_from_state(
-            state
+            state,
         )
 
     assert repository.saved_booking is None
     assert state.booking_id is None
 
-def test_booking_service_uses_configured_duration():
+
+def test_booking_service_uses_configured_duration() -> None:
     repository = FakeBookingRepository()
     calendar_provider = InMemoryCalendarProvider()
 
@@ -235,7 +416,7 @@ def test_booking_service_uses_configured_duration():
     )
 
     service.create_booking_from_state(
-        make_complete_state()
+        make_complete_state(),
     )
 
     bookings = calendar_provider.list_bookings(
@@ -271,12 +452,13 @@ def test_booking_service_uses_configured_duration():
         0,
     )
 
-def test_booking_service_rejects_invalid_datetime_format():
+
+def test_booking_service_rejects_invalid_datetime_format() -> None:
     repository = FakeBookingRepository()
     calendar_provider = InMemoryCalendarProvider()
 
     calendar_service = CalendarService(
-        provider=calendar_provider
+        provider=calendar_provider,
     )
 
     state = make_complete_state()
@@ -292,10 +474,11 @@ def test_booking_service_rejects_invalid_datetime_format():
         match="DD/MM/YYYY and HH:MM",
     ):
         service.create_booking_from_state(
-            state
+            state,
         )
 
     assert repository.saved_booking is None
+
 
 def test_get_available_slots_for_date_delegates_to_calendar_service(
 ) -> None:
@@ -349,6 +532,7 @@ def test_get_available_slots_for_date_delegates_to_calendar_service(
         rules=rules,
         now=now,
     )
+
 
 def test_get_available_slots_for_date_returns_empty_without_calendar(
 ) -> None:
