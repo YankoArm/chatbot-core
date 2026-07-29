@@ -1,11 +1,54 @@
-from datetime import datetime
+from datetime import date, datetime, time
+from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 
+from chatbot.availability import (
+    BookingRules,
+    BusinessHours,
+)
 from chatbot.calendar import (
     CalendarService,
     InMemoryCalendarProvider,
 )
+from chatbot.calendar.provider import CalendarProvider
+
+
+class FakeCalendarProvider(CalendarProvider):
+    def is_available(
+        self,
+        *,
+        start: datetime,
+        end: datetime,
+    ) -> bool:
+        return True
+
+    def create_booking(
+        self,
+        *,
+        start: datetime,
+        end: datetime,
+        title: str,
+        description: str | None = None,
+        attendee: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        return "booking-123"
+
+    def cancel_booking(
+        self,
+        booking_id: str,
+    ) -> None:
+        pass
+
+    def list_bookings(
+        self,
+        *,
+        start: datetime,
+        end: datetime,
+    ) -> list[dict[str, Any]]:
+        return []
 
 
 def make_service(
@@ -44,7 +87,7 @@ def test_calendar_service_builds_time_range():
 
 def test_calendar_service_uses_default_duration():
     service = make_service(
-        duration_minutes=30
+        duration_minutes=30,
     )
 
     start, end = service.build_time_range(
@@ -96,7 +139,7 @@ def test_calendar_service_creates_booking():
     provider = InMemoryCalendarProvider()
 
     service = CalendarService(
-        provider=provider
+        provider=provider,
     )
 
     booking_id = service.create_booking(
@@ -159,7 +202,7 @@ def test_calendar_service_rejects_unavailable_slot():
     )
 
     service = CalendarService(
-        provider=provider
+        provider=provider,
     )
 
     with pytest.raises(
@@ -177,7 +220,7 @@ def test_calendar_service_cancels_booking():
     provider = InMemoryCalendarProvider()
 
     service = CalendarService(
-        provider=provider
+        provider=provider,
     )
 
     booking_id = service.create_booking(
@@ -187,7 +230,7 @@ def test_calendar_service_cancels_booking():
     )
 
     service.cancel_booking(
-        booking_id
+        booking_id,
     )
 
     assert service.is_available(
@@ -254,3 +297,94 @@ def test_calendar_service_rejects_invalid_override_duration(
             time="16:30",
             duration_minutes=duration_minutes,
         )
+
+
+def test_calendar_service_returns_dates_with_available_slots() -> None:
+    provider = FakeCalendarProvider()
+
+    service = CalendarService(
+        provider=provider,
+    )
+
+    business_hours = BusinessHours.standard_week(
+        start=time(9, 0),
+        end=time(18, 0),
+        timezone_name="Europe/Madrid",
+    )
+
+    rules = BookingRules.hourly()
+
+    now = datetime(
+        2026,
+        7,
+        28,
+        8,
+        0,
+        tzinfo=ZoneInfo("Europe/Madrid"),
+    )
+
+    available_dates = service.get_available_dates(
+        start_date=date(2026, 7, 28),
+        days=3,
+        business_hours=business_hours,
+        rules=rules,
+        now=now,
+    )
+
+    assert available_dates == (
+        date(2026, 7, 28),
+        date(2026, 7, 29),
+        date(2026, 7, 30),
+    )
+
+def test_calendar_service_skips_dates_without_available_slots() -> None:
+    provider = FakeCalendarProvider()
+
+    service = CalendarService(
+        provider=provider,
+    )
+
+    business_hours = BusinessHours.standard_week(
+        start=time(9, 0),
+        end=time(18, 0),
+        timezone_name="Europe/Madrid",
+    )
+
+    rules = BookingRules.hourly()
+
+    now = datetime(
+        2026,
+        7,
+        28,
+        8,
+        0,
+        tzinfo=ZoneInfo("Europe/Madrid"),
+    )
+
+    provider.list_bookings = lambda **kwargs: [
+        {
+            "start": {
+                "dateTime": (
+                    "2026-07-28T09:00:00+02:00"
+                ),
+            },
+            "end": {
+                "dateTime": (
+                    "2026-07-28T18:00:00+02:00"
+                ),
+            },
+        }
+    ]
+
+    available_dates = service.get_available_dates(
+        start_date=date(2026, 7, 28),
+        days=3,
+        business_hours=business_hours,
+        rules=rules,
+        now=now,
+    )
+
+    assert available_dates == (
+        date(2026, 7, 29),
+        date(2026, 7, 30),
+    )

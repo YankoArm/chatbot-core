@@ -5,7 +5,7 @@ from chatbot.capabilities.booking import BookingCapability
 from chatbot.conversation.context import ConversationContext
 
 from datetime import time
-
+from unittest.mock import Mock
 from chatbot.availability import (
     BookingRules,
     BusinessHours,
@@ -120,7 +120,11 @@ def test_booking_capability_stores_phone_and_requests_date() -> None:
 
     assert context.booking.phone == "+34600123123"
     assert context.booking.next_step is BookingStep.DATE
-    assert response.text == "¿Para qué día quieres la cita?"
+    assert response.text == (
+        "Tengo disponibilidad para los siguientes días: "
+        "28/07/2026, 29/07/2026, 30/07/2026. "
+        "¿Qué día prefieres?"
+    )
 
 
 def test_booking_capability_stores_date_and_requests_time() -> None:
@@ -541,3 +545,76 @@ def test_booking_capability_requests_new_date_when_no_times_remain() -> None:
     assert context.booking.next_step is BookingStep.DATE
 
     assert "No quedan horas disponibles" in response.text
+
+def test_booking_capability_reports_no_available_dates_after_phone() -> None:
+    booking_service = Mock()
+    booking_service.get_available_dates.return_value = ()
+
+    business_hours = BusinessHours.standard_week(
+        start=time(9, 0),
+        end=time(18, 0),
+        timezone_name="Europe/Madrid",
+    )
+
+    booking_rules = BookingRules.hourly()
+
+    capability = BookingCapability(
+        booking_service=booking_service,
+        business_hours=business_hours,
+        booking_rules=booking_rules,
+    )
+
+    context = ConversationContext(
+        session_id="user_1",
+    )
+    context.booking = BookingState(
+        name="Yanko",
+    )
+    context.set_active_capability(
+        "booking",
+    )
+
+    response = capability.handle(
+        context=context,
+        message="600123123",
+    )
+
+    assert context.booking.phone == "+34600123123"
+    assert context.booking.next_step is BookingStep.DATE
+    assert response.text == (
+        "Ahora mismo no tengo fechas disponibles. "
+        "Inténtalo de nuevo más adelante."
+    )
+
+def test_booking_capability_rejects_unavailable_date() -> None:
+    capability = BookingCapability()
+
+    context = ConversationContext(
+        session_id="user_1",
+    )
+
+    context.booking = BookingState(
+        name="Yanko",
+        phone="+34600123123",
+        available_dates=(
+            "29/07/2026",
+            "30/07/2026",
+        ),
+    )
+
+    context.set_active_capability(
+        "booking",
+    )
+
+    response = capability.handle(
+        context=context,
+        message="31/07/2026",
+    )
+
+    assert context.booking.date is None
+    assert (
+        "Lo siento, esa fecha no está disponible"
+        in response.text
+    )
+    assert "29/07/2026" in response.text
+    assert "30/07/2026" in response.text

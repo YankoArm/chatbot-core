@@ -92,3 +92,8 @@ def test_booking_state_reset_clears_all_data() -> None:
     assert state.time is None
     assert state.is_complete is False
     assert state.next_step is BookingStep.NAME
+
+def test_booking_state_starts_without_available_dates() -> None:
+    booking = BookingState()
+
+    assert booking.available_dates == ()

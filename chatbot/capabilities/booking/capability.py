@@ -123,6 +123,11 @@ _TEXTS = {
             "Tengo disponibilidad para los siguientes días: "
             "{dates}. ¿Qué día prefieres?"
         ),
+        "selected_date_unavailable": (
+            "Lo siento, esa fecha no está disponible. "
+            "Ahora mismo tengo disponibles estos días: "
+            "{dates}. ¿Cuál prefieres?"
+        ),
         "invalid_date": (
             "La fecha no parece válida. "
             "Escríbela con el formato DD/MM/YYYY "
@@ -205,6 +210,11 @@ _TEXTS = {
         "available_dates": (
             "I have availability on the following dates: "
             "{dates}. Which date would you prefer?"
+        ),
+        "selected_date_unavailable": (
+            "Sorry, that date is not available. "
+            "These dates are currently available: "
+            "{dates}. Which one would you prefer?"
         ),
         "invalid_date": (
             "That date doesn't seem valid. "
@@ -400,9 +410,8 @@ class BookingCapability(BaseCapability):
 
         return self._response(
             context=context,
-            text=self._text(
-                context,
-                "ask_date",
+            text=self._build_available_dates_message(
+                context
             ),
         )
 
@@ -440,6 +449,25 @@ class BookingCapability(BaseCapability):
                 text=self._text(
                     context,
                     "invalid_date",
+                ),
+            )
+
+        available_dates = (
+            context.booking.available_dates
+        )
+
+        if (
+            available_dates
+            and date not in available_dates
+        ):
+            return self._response(
+                context=context,
+                text=self._text(
+                    context,
+                    "selected_date_unavailable",
+                    dates=", ".join(
+                        available_dates
+                    ),
                 ),
             )
 
@@ -900,18 +928,75 @@ class BookingCapability(BaseCapability):
 
     def _get_available_dates(
         self,
+        *,
+        days: int = 30,
     ) -> list[str]:
         """
-        Temporary availability source.
+        Return formatted available dates.
 
-        Google Calendar will replace this hardcoded implementation.
+        Uses CalendarService when available and falls back to
+        the temporary hardcoded dates otherwise.
         """
 
+        if (
+            self._booking_service is None
+            or self._business_hours is None
+            or self._booking_rules is None
+        ):
+            return [
+                "28/07/2026",
+                "29/07/2026",
+                "30/07/2026",
+            ]
+
+        timezone = ZoneInfo(
+            self._business_hours.timezone_name
+        )
+
+        available_dates = (
+            self._booking_service.get_available_dates(
+                start_date=datetime.now(
+                    timezone,
+                ).date(),
+                days=days,
+                business_hours=self._business_hours,
+                rules=self._booking_rules,
+                now=datetime.now(
+                    timezone,
+                ),
+            )
+        )
+
         return [
-            "28/07/2026",
-            "29/07/2026",
-            "30/07/2026",
+            available_date.strftime(
+                "%d/%m/%Y",
+            )
+            for available_date in available_dates
         ]
+
+    def _build_available_dates_message(
+        self,
+        context: Any,
+    ) -> str:
+        available_dates = self._get_available_dates()
+
+        context.booking.available_dates = tuple(
+            available_dates
+        )
+
+        if not available_dates:
+            return self._text(
+                context,
+                "no_available_dates",
+            )
+
+        return self._text(
+            context,
+            "available_dates",
+            dates=", ".join(
+                available_dates
+            ),
+        )
 
     def _get_available_times(
         self,

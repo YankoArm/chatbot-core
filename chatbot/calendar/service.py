@@ -295,6 +295,49 @@ class CalendarService:
             )
         )
 
+    def get_available_dates(
+        self,
+        *,
+        start_date: date,
+        days: int,
+        business_hours: BusinessHours,
+        rules: BookingRules,
+        now: datetime,
+    ) -> tuple[date, ...]:
+        """
+        Return dates that contain at least one available booking slot.
+        """
+
+        if days <= 0:
+            raise ValueError(
+                "Days must be greater than zero."
+            )
+
+        available_dates: list[date] = []
+
+        for offset in range(days):
+            target_date = start_date + timedelta(
+                days=offset,
+            )
+
+            available_slots = (
+                self.get_available_slots_for_date(
+                    target_date,
+                    business_hours=business_hours,
+                    rules=rules,
+                    now=now,
+                )
+            )
+
+            if available_slots:
+                available_dates.append(
+                    target_date
+                )
+
+        return tuple(
+            available_dates
+        )
+
     @staticmethod
     def _validate_aware_window(
         start: datetime,
