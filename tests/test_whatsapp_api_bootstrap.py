@@ -79,3 +79,23 @@ def test_whatsapp_api_exposes_health_endpoint() -> None:
         "status": "ok",
         "service": "flowforge-whatsapp",
     }
+
+def test_whatsapp_api_exposes_readiness_endpoint() -> None:
+    handler = RecordingMessageHandler()
+
+    app = build_whatsapp_api(
+        message_handler=handler,
+        verify_token="test-token",
+    )
+
+    client = TestClient(app)
+
+    response = client.get(
+        "/ready",
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ready",
+        "service": "flowforge-whatsapp",
+    }

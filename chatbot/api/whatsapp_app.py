@@ -34,6 +34,13 @@ def build_whatsapp_api(
             "service": "flowforge-whatsapp",
         }
 
+    @app.get("/ready")
+    def ready() -> dict[str, str]:
+        return {
+            "status": "ready",
+            "service": "flowforge-whatsapp",
+        }
+
     app.include_router(
         create_whatsapp_router(
             message_handler=message_handler,
