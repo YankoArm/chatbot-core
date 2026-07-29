@@ -4,6 +4,9 @@ from chatbot.connectors.whatsapp.message_handler import (
     WhatsAppMessageHandler,
 )
 
+from chatbot.connectors.whatsapp.graph_sender import WhatsAppGraphSender
+from chatbot.connectors.whatsapp.graph_client import WhatsAppMessageResponse
+
 def test_whatsapp_message_handler_can_be_created() -> None:
     handler = WhatsAppMessageHandler()
 
@@ -164,3 +167,42 @@ def test_whatsapp_message_handler_sends_orchestrator_response() -> None:
 
     assert sender.recipient == "123"
     assert sender.text == "OK"
+
+class RecordingGraphClient:
+    def __init__(self) -> None:
+        self.to: str | None = None
+        self.text: str | None = None
+
+    def send_text_message(
+        self,
+        *,
+        to: str,
+        text: str,
+    ) -> WhatsAppMessageResponse:
+        self.to = to
+        self.text = text
+
+        return WhatsAppMessageResponse(
+            message_id="message-123",
+        )
+
+def test_whatsapp_message_handler_sends_response_through_graph_sender() -> None:
+    parser = ReturningParser()
+    orchestrator = RecordingOrchestrator()
+    graph_client = RecordingGraphClient()
+
+    sender = WhatsAppGraphSender(
+        graph_client=graph_client,
+    )
+
+    handler = WhatsAppMessageHandler(
+        parser=parser,
+        orchestrator=orchestrator,
+        sender=sender,
+    )
+
+    result = handler.handle({"entry": []})
+
+    assert result == "OK"
+    assert graph_client.to == "123"
+    assert graph_client.text == "OK"
