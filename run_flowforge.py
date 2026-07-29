@@ -98,12 +98,14 @@ def create_app(
     )
 
 
-def create_production_app() -> FastAPI:
+def create_production_app(
+    *,
+    config: FlowForgeConfig,
+) -> FastAPI:
     """
-    Load production configuration and external services.
+    Build the production FlowForge application
+    using the provided configuration.
     """
-
-    config = FlowForgeConfig.load()
 
     calendar_service = build_calendar_service()
 
@@ -118,7 +120,6 @@ def create_production_app() -> FastAPI:
         graph_client=graph_client,
     )
 
-
 def main() -> None:
     """
     Run the FlowForge WhatsApp HTTP server.
@@ -126,14 +127,12 @@ def main() -> None:
 
     config = FlowForgeConfig.load()
 
-    app = create_production_app()
+    app = create_production_app(
+        config=config,
+    )
 
     uvicorn.run(
         app,
         host=config.server.host,
         port=config.server.port,
     )
-
-
-if __name__ == "__main__":
-    main()
