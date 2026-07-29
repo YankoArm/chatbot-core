@@ -11,33 +11,12 @@ from fastapi import (
 )
 from fastapi.responses import PlainTextResponse
 
-
-class WhatsAppWebhookMessageProtocol(Protocol):
-    phone_number: str
-    message_id: str
-    text: str
-    metadata: dict[str, Any]
-
-
-class WhatsAppWebhookParserProtocol(Protocol):
-    def parse(
+class WhatsAppMessageHandlerProtocol(Protocol):
+    def handle(
         self,
         payload: dict[str, Any],
-    ) -> WhatsAppWebhookMessageProtocol | None:
-        ...
-
-
-class WhatsAppChannelProtocol(Protocol):
-    def process(
-        self,
-        *,
-        phone_number: str,
-        text: str,
-        message_id: str,
-        metadata: dict[str, Any] | None = None,
     ) -> object:
         ...
-
 
 class WhatsAppSignatureVerifierProtocol(Protocol):
     def verify(
@@ -51,8 +30,7 @@ class WhatsAppSignatureVerifierProtocol(Protocol):
 
 def create_whatsapp_router(
     *,
-    parser: WhatsAppWebhookParserProtocol | None = None,
-    channel: WhatsAppChannelProtocol | None = None,
+    message_handler: WhatsAppMessageHandlerProtocol | None = None,
     verify_token: str | None = None,
     signature_verifier: WhatsAppSignatureVerifierProtocol | None = None,
 ) -> APIRouter:
@@ -97,20 +75,8 @@ def create_whatsapp_router(
 
         payload: dict[str, Any] = await request.json()
 
-        if parser is None:
-            return {"status": "ok"}
-
-        message = parser.parse(payload)
-
-        if message is None or channel is None:
-            return {"status": "ok"}
-
-        channel.process(
-            phone_number=message.phone_number,
-            text=message.text,
-            message_id=message.message_id,
-            metadata=message.metadata,
-        )
+        if message_handler is not None:
+            message_handler.handle(payload)
 
         return {"status": "ok"}
 

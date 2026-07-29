@@ -4,8 +4,19 @@ from chatbot.connectors.whatsapp.message_handler import (
     WhatsAppMessageHandler,
 )
 
+from chatbot.application import Bootstrap
+from chatbot.capabilities.booking.capability import BookingCapability
+from chatbot.instances import Instance
+from chatbot.registry import CapabilityRegistry
+
+from chatbot.connectors.whatsapp.application_adapter import (
+    FlowForgeWhatsAppAdapter,
+)
+from chatbot.responses import Response
+
 from chatbot.connectors.whatsapp.graph_sender import WhatsAppGraphSender
 from chatbot.connectors.whatsapp.graph_client import WhatsAppMessageResponse
+from chatbot.connectors.whatsapp.parser import WhatsAppPayloadParser
 
 def test_whatsapp_message_handler_can_be_created() -> None:
     handler = WhatsAppMessageHandler()
@@ -206,3 +217,173 @@ def test_whatsapp_message_handler_sends_response_through_graph_sender() -> None:
     assert result == "OK"
     assert graph_client.to == "123"
     assert graph_client.text == "OK"
+
+def test_whatsapp_message_handler_processes_real_meta_payload() -> None:
+    parser = WhatsAppPayloadParser()
+    orchestrator = RecordingOrchestrator()
+    graph_client = RecordingGraphClient()
+
+    sender = WhatsAppGraphSender(
+        graph_client=graph_client,
+    )
+
+    handler = WhatsAppMessageHandler(
+        parser=parser,
+        orchestrator=orchestrator,
+        sender=sender,
+    )
+
+    payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": "34600000000",
+                                    "text": {
+                                        "body": "Hola",
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    result = handler.handle(payload)
+
+    assert result == "OK"
+    assert orchestrator.received_message == IncomingWhatsAppMessage(
+        user_id="34600000000",
+        text="Hola",
+    )
+    assert graph_client.to == "34600000000"
+    assert graph_client.text == "OK"
+
+class RecordingFlowForgeApplication:
+    def __init__(self) -> None:
+        self.session_id: str | None = None
+        self.message: str | None = None
+
+    def chat(
+        self,
+        session_id: str,
+        message: str,
+    ) -> Response:
+        self.session_id = session_id
+        self.message = message
+
+        return Response(
+            text="Respuesta real de FlowForge",
+        )
+
+def test_whatsapp_message_handler_uses_flowforge_application() -> None:
+    application = RecordingFlowForgeApplication()
+    graph_client = RecordingGraphClient()
+
+    handler = WhatsAppMessageHandler(
+        parser=WhatsAppPayloadParser(),
+        orchestrator=FlowForgeWhatsAppAdapter(
+            application=application,
+        ),
+        sender=WhatsAppGraphSender(
+            graph_client=graph_client,
+        ),
+    )
+
+    payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": "34600000000",
+                                    "text": {
+                                        "body": "Quiero reservar una cita",
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    result = handler.handle(payload)
+
+    assert application.session_id == "34600000000"
+    assert application.message == "Quiero reservar una cita"
+
+    assert result == "Respuesta real de FlowForge"
+
+    assert graph_client.to == "34600000000"
+    assert graph_client.text == "Respuesta real de FlowForge"
+
+def build_booking_application():
+    registry = CapabilityRegistry()
+    registry.register(BookingCapability)
+
+    instance = Instance(
+        id="tarot_esmeralda",
+        name="Tarot Esmeralda",
+        capabilities=["booking"],
+    )
+
+    bootstrap = Bootstrap(
+        capability_registry=registry,
+    )
+
+    return bootstrap.build_from_instance(instance)
+
+def test_whatsapp_message_handler_processes_message_with_real_flowforge() -> None:
+    application = build_booking_application()
+    graph_client = RecordingGraphClient()
+
+    handler = WhatsAppMessageHandler(
+        parser=WhatsAppPayloadParser(),
+        orchestrator=FlowForgeWhatsAppAdapter(
+            application=application,
+        ),
+        sender=WhatsAppGraphSender(
+            graph_client=graph_client,
+        ),
+    )
+
+    payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": "34600000000",
+                                    "text": {
+                                        "body": "Quiero reservar una cita",
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    result = handler.handle(payload)
+
+    expected_response = (
+        "Perfecto. Vamos a reservar una cita. "
+        "¿Cómo te llamas?"
+    )
+
+    assert result == expected_response
+    assert graph_client.to == "34600000000"
+    assert graph_client.text == expected_response
