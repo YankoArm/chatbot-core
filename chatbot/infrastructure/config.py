@@ -49,7 +49,10 @@ class FlowForgeConfig:
                 ),
                 port=_environment_integer(
                     "FLOWFORGE_PORT",
-                    8000,
+                    _environment_integer(
+                        "PORT",
+                        8000,
+                    ),
                 ),
             ),
         )
