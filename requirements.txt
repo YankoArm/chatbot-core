@@ -5,3 +5,4 @@ google-api-python-client
 google-auth
 google-auth-oauthlib
 tzdata>=2025.2
+phonenumbers==9.0.10
