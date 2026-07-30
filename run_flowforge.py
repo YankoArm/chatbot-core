@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import uvicorn
 from fastapi import FastAPI
 
@@ -22,10 +24,13 @@ from chatbot.instances import Instance
 from run_google_calendar import build_calendar_service
 
 
+logger = logging.getLogger(__name__)
+
+
 def create_app(
     *,
     config: FlowForgeConfig,
-    calendar_service: CalendarService,
+    calendar_service: CalendarService | None,
     graph_client: WhatsAppGraphClientProtocol,
 ) -> FastAPI:
     """
@@ -34,21 +39,29 @@ def create_app(
     Dependencies are received explicitly so the production
     composition can be tested without connecting to Meta or
     Google Calendar.
+
+    Booking is enabled only when a CalendarService is available.
     """
 
-    booking_repository = InMemoryBookingRepository()
+    capability_factories: dict[str, object] = {}
+    enabled_capabilities = ["greeting"]
 
-    booking_service = BookingService(
-        repository=booking_repository,
-        calendar_service=calendar_service,
-    )
+    if calendar_service is not None:
+        booking_repository = InMemoryBookingRepository()
+
+        booking_service = BookingService(
+            repository=booking_repository,
+            calendar_service=calendar_service,
+        )
+
+        capability_factories["booking"] = lambda: BookingCapability(
+            booking_service=booking_service,
+        )
+
+        enabled_capabilities.append("booking")
 
     bootstrap = Bootstrap(
-        capability_factories={
-            "booking": lambda: BookingCapability(
-                booking_service=booking_service,
-            ),
-        },
+        capability_factories=capability_factories,
     )
 
     instance = Instance(
@@ -56,10 +69,7 @@ def create_app(
         name="FlowForge WhatsApp",
         default_language="es",
         channels=["whatsapp"],
-        capabilities=[
-            "greeting",
-            "booking",
-        ],
+        capabilities=enabled_capabilities,
     )
 
     application = bootstrap.build_from_instance(instance)
@@ -85,11 +95,22 @@ def create_production_app(
     config: FlowForgeConfig,
 ) -> FastAPI:
     """
-    Build the production FlowForge application
-    using the provided configuration.
+    Build the production FlowForge application.
+
+    The WhatsApp integration remains available when Google Calendar
+    credentials have not yet been configured. In that situation,
+    booking is temporarily disabled.
     """
 
-    calendar_service = build_calendar_service()
+    try:
+        calendar_service: CalendarService | None = build_calendar_service()
+    except FileNotFoundError as error:
+        logger.warning(
+            "Google Calendar credentials are unavailable. "
+            "FlowForge will start without booking support: %s",
+            error,
+        )
+        calendar_service = None
 
     graph_client = WhatsAppGraphClient(
         access_token=config.whatsapp.access_token,
@@ -107,6 +128,11 @@ def main() -> None:
     """
     Run the FlowForge WhatsApp HTTP server.
     """
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
 
     config = FlowForgeConfig.load()
 
