@@ -3,35 +3,23 @@ from __future__ import annotations
 import uvicorn
 from fastapi import FastAPI
 
-from chatbot.api.whatsapp_app import (
-    build_whatsapp_api,
-)
+from chatbot.api.whatsapp_app import build_whatsapp_api
 from chatbot.application import Bootstrap
 from chatbot.booking import (
     BookingService,
     InMemoryBookingRepository,
 )
 from chatbot.calendar import CalendarService
-from chatbot.capabilities.booking import (
-    BookingCapability,
-)
+from chatbot.capabilities.booking import BookingCapability
 from chatbot.connectors.whatsapp.bootstrap import (
     WhatsAppGraphClientProtocol,
     build_whatsapp_message_handler,
 )
-from chatbot.connectors.whatsapp.graph_client import (
-    WhatsAppGraphClient,
-)
-from chatbot.connectors.whatsapp.signature import (
-    WhatsAppSignatureVerifier,
-)
-from chatbot.infrastructure.config import (
-    FlowForgeConfig,
-)
+from chatbot.connectors.whatsapp.graph_client import WhatsAppGraphClient
+from chatbot.connectors.whatsapp.signature import WhatsAppSignatureVerifier
+from chatbot.infrastructure.config import FlowForgeConfig
 from chatbot.instances import Instance
-from run_google_calendar import (
-    build_calendar_service,
-)
+from run_google_calendar import build_calendar_service
 
 
 def create_app(
@@ -67,24 +55,18 @@ def create_app(
         id="flowforge-whatsapp",
         name="FlowForge WhatsApp",
         default_language="es",
-        channels=[
-            "whatsapp",
-        ],
+        channels=["whatsapp"],
         capabilities=[
             "greeting",
             "booking",
         ],
     )
 
-    application = bootstrap.build_from_instance(
-        instance,
-    )
+    application = bootstrap.build_from_instance(instance)
 
-    graph_message_handler = (
-        build_whatsapp_message_handler(
-            application=application,
-            graph_client=graph_client,
-        )
+    graph_message_handler = build_whatsapp_message_handler(
+        application=application,
+        graph_client=graph_client,
     )
 
     signature_verifier = WhatsAppSignatureVerifier(
@@ -120,6 +102,7 @@ def create_production_app(
         graph_client=graph_client,
     )
 
+
 def main() -> None:
     """
     Run the FlowForge WhatsApp HTTP server.
@@ -136,3 +119,7 @@ def main() -> None:
         host=config.server.host,
         port=config.server.port,
     )
+
+
+if __name__ == "__main__":
+    main()
