@@ -75,6 +75,11 @@ def test_bootstrap_builds_tarot_alvin_from_business_template():
 def test_tarot_alvin_answers_faq_from_json_knowledge():
     app = build_tarot_alvin_application()
 
+    app.chat(
+        session_id="faq-integration-session",
+        message="Tarot",
+    )
+
     response = app.chat(
         session_id="faq-integration-session",
         message="¿Cuánto cuesta una sesión?",
@@ -93,6 +98,11 @@ def test_tarot_alvin_answers_faq_from_json_knowledge():
 
 def test_tarot_alvin_uses_english_faq_answer():
     app = build_tarot_alvin_application()
+
+    app.chat(
+        session_id="english-faq-session",
+        message="Tarot",
+    )
 
     response = app.chat(
         session_id="english-faq-session",

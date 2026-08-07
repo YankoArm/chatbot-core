@@ -19,9 +19,11 @@ def build_policy(
             "Este número también se utiliza de forma personal. "
             "Para iniciar el asistente, escribe únicamente TAROT."
         ),
+        activated_message=(
+            "Asistente activado."
+        ),
         prompt_cooldown=prompt_cooldown,
     )
-
 
 def test_always_active_policy_continues() -> None:
     policy = AlwaysActivePolicy()
@@ -34,6 +36,7 @@ def test_always_active_policy_continues() -> None:
 
     assert result.action == ActivationAction.CONTINUE
     assert result.should_process_message is True
+    assert result.message is None
     assert result.should_respond is False
 
 
@@ -58,7 +61,8 @@ def test_exact_phrase_activates_for_exact_normalized_match(
     )
 
     assert result.action == ActivationAction.ACTIVATE
-    assert result.should_process_message is True
+    assert result.should_process_message is False
+    assert result.message == "Asistente activado."
     assert result.should_respond is False
 
 
@@ -162,6 +166,7 @@ def test_policy_rejects_empty_phrases() -> None:
         ExactPhrasePolicy(
             phrases=["", "   "],
             prompt_message="Escribe TAROT.",
+            activated_message="Asistente activado.",
         )
 
 
@@ -170,6 +175,7 @@ def test_policy_rejects_empty_prompt_message() -> None:
         ExactPhrasePolicy(
             phrases=["Tarot"],
             prompt_message="   ",
+            activated_message="Asistente activado.",
         )
 
 
@@ -179,4 +185,5 @@ def test_policy_rejects_negative_cooldown() -> None:
             phrases=["Tarot"],
             prompt_message="Escribe TAROT.",
             prompt_cooldown=timedelta(seconds=-1),
+            activated_message="Asistente activado.",
         )

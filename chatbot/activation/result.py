@@ -15,13 +15,15 @@ class ActivationResult:
     @property
     def should_process_message(self) -> bool:
         """
-        Indica si el mensaje debe continuar hacia el orquestador.
+        Indicate whether the original message should continue
+        to the conversation orchestrator.
+
+        Activation commands are consumed by the activation layer.
+        Only messages received while the session is already active
+        continue to normal conversational processing.
         """
 
-        return self.action in {
-            ActivationAction.ACTIVATE,
-            ActivationAction.CONTINUE,
-        }
+        return self.action == ActivationAction.CONTINUE
 
     @property
     def should_respond(self) -> bool:

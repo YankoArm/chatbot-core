@@ -76,8 +76,9 @@ def test_exact_phrase_configuration_allows_activation() -> None:
         state=state,
     )
 
-    assert decision.continue_processing is True
-    assert decision.response is None
+    assert decision.continue_processing is False
+    assert decision.response is not None
+    assert decision.response.text == "Assistant activated."
     assert state.active is True
 
 

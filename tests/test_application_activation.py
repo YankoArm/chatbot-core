@@ -90,6 +90,7 @@ def test_exact_phrase_policy_returns_prompt_before_orchestrator() -> None:
         policy=ExactPhrasePolicy(
             phrases=["Tarot"],
             prompt_message=PROMPT_MESSAGE,
+            activated_message="Asistente activado.",
         ),
     )
 
@@ -109,6 +110,7 @@ def test_exact_phrase_activates_and_reaches_orchestrator() -> None:
         policy=ExactPhrasePolicy(
             phrases=["Tarot"],
             prompt_message=PROMPT_MESSAGE,
+            activated_message="Asistente activado.",
         ),
     )
 
@@ -119,8 +121,8 @@ def test_exact_phrase_activates_and_reaches_orchestrator() -> None:
         message="Tarot",
     )
 
-    assert response.text == "processed:Tarot"
-    assert len(orchestrator.calls) == 1
+    assert response.text == "Asistente activado."
+    assert len(orchestrator.calls) == 0
 
 
 def test_active_session_allows_following_messages() -> None:
@@ -128,6 +130,7 @@ def test_active_session_allows_following_messages() -> None:
         policy=ExactPhrasePolicy(
             phrases=["Tarot"],
             prompt_message=PROMPT_MESSAGE,
+            activated_message="Asistente activado.",
         ),
     )
 
@@ -144,7 +147,7 @@ def test_active_session_allows_following_messages() -> None:
     )
 
     assert response.text == "processed:Quiero una lectura"
-    assert len(orchestrator.calls) == 2
+    assert len(orchestrator.calls) == 1
 
 
 def test_activation_state_is_isolated_by_session() -> None:
@@ -152,6 +155,7 @@ def test_activation_state_is_isolated_by_session() -> None:
         policy=ExactPhrasePolicy(
             phrases=["Tarot"],
             prompt_message=PROMPT_MESSAGE,
+            activated_message="Asistente activado.",
         ),
     )
 
@@ -168,7 +172,7 @@ def test_activation_state_is_isolated_by_session() -> None:
     )
 
     assert response.text == PROMPT_MESSAGE
-    assert len(orchestrator.calls) == 1
+    assert len(orchestrator.calls) == 0
 
 
 def test_reset_session_requires_activation_again() -> None:
@@ -176,6 +180,7 @@ def test_reset_session_requires_activation_again() -> None:
         policy=ExactPhrasePolicy(
             phrases=["Tarot"],
             prompt_message=PROMPT_MESSAGE,
+            activated_message="Asistente activado.",
         ),
     )
 
@@ -194,4 +199,4 @@ def test_reset_session_requires_activation_again() -> None:
     )
 
     assert response.text == PROMPT_MESSAGE
-    assert len(orchestrator.calls) == 1
+    assert len(orchestrator.calls) == 0

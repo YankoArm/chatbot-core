@@ -121,6 +121,35 @@ class BookingService:
 
         return booking
 
+    def get_available_dates(
+        self,
+        *,
+        start_date: date,
+        days: int,
+        business_hours: BusinessHours,
+        rules: BookingRules,
+        now: datetime,
+    ) -> tuple[date, ...]:
+        """
+        Return dates containing at least one available booking slot.
+
+        Calendar availability is delegated to CalendarService.
+        """
+
+        if self._calendar_service is None:
+            return ()
+
+        return (
+            self._calendar_service
+            .get_available_dates(
+                start_date=start_date,
+                days=days,
+                business_hours=business_hours,
+                rules=rules,
+                now=now,
+            )
+        )
+
     def get_available_slots_for_date(
         self,
         target_date: date,

@@ -4,6 +4,10 @@ from chatbot.application import Bootstrap
 from chatbot.booking import (
     BookingService,
     InMemoryBookingRepository,
+    build_booking_configuration,
+)
+from chatbot.business_templates.tarot import (
+    create_tarot_template,
 )
 from chatbot.capabilities.booking import (
     BookingCapability,
@@ -12,7 +16,10 @@ from chatbot.channels import (
     ApplicationChannel,
     CLIChannel,
 )
-from chatbot.instances import Instance
+from chatbot.clients.tarot_alvin import (
+    create_tarot_alvin_definition,
+)
+from chatbot.instances import InstanceResolver
 from run_google_calendar import (
     build_calendar_service,
 )
@@ -20,16 +27,21 @@ from run_google_calendar import (
 
 def main() -> None:
     """
-    Run FlowForge using the interactive CLI channel.
+    Run Tarot Alvin through the interactive CLI channel.
     """
 
-    instance = Instance(
-        id="demo",
-        name="FlowForge Demo",
-        capabilities=[
-            "greeting",
-            "booking",
-        ],
+    template = create_tarot_template()
+    definition = create_tarot_alvin_definition()
+
+    instance = InstanceResolver().resolve(
+        template=template,
+        definition=definition,
+    )
+
+    booking_configuration = (
+        build_booking_configuration(
+            instance
+        )
     )
 
     calendar_service = build_calendar_service()
@@ -47,6 +59,12 @@ def main() -> None:
         capability_factories={
             "booking": lambda: BookingCapability(
                 booking_service=booking_service,
+                business_hours=(
+                    booking_configuration.business_hours
+                ),
+                booking_rules=(
+                    booking_configuration.booking_rules
+                ),
             ),
         },
     )
@@ -64,10 +82,13 @@ def main() -> None:
     )
 
     print("=" * 50)
-    print(" FlowForge CLI")
+    print(" FlowForge CLI - Tarot Alvin")
     print("=" * 50)
     print(
         "Google Calendar integration enabled."
+    )
+    print(
+        "Client booking configuration loaded."
     )
     print(
         "Type 'exit', 'quit' or 'salir' to close."

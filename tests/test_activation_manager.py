@@ -34,6 +34,7 @@ def build_manager(
     policy = ExactPhrasePolicy(
         phrases=["Tarot"],
         prompt_message=PROMPT_MESSAGE,
+        activated_message="Asistente activado.",
     )
 
     return ActivationManager(

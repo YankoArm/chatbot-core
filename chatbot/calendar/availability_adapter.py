@@ -58,6 +58,18 @@ class CalendarAvailabilityAdapter:
         start_data = event.get("start")
         end_data = event.get("end")
 
+        if isinstance(start_data, datetime):
+            if not isinstance(end_data, datetime):
+                raise CalendarEventAdapterError(
+                    "Calendar event does not contain "
+                    "a valid end datetime."
+                )
+
+            return BusyPeriod(
+                start=start_data,
+                end=end_data,
+            )
+
         if not isinstance(start_data, Mapping):
             raise CalendarEventAdapterError(
                 "Calendar event does not contain "

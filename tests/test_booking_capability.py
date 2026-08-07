@@ -4,7 +4,7 @@ from chatbot.booking import BookingSlotUnavailableError, BookingState, BookingSt
 from chatbot.capabilities.booking import BookingCapability
 from chatbot.conversation.context import ConversationContext
 
-from datetime import time
+from datetime import date, time, timedelta
 from unittest.mock import Mock
 from chatbot.availability import (
     BookingRules,
@@ -16,6 +16,7 @@ class FakeBookingService:
         self.received_state: BookingState | None = None
         self.raise_slot_unavailable = False
         self.available_slots = ()
+        self.available_dates: tuple[date, ...] = ()
 
     def create_booking_from_state(
         self,
@@ -34,6 +35,17 @@ class FakeBookingService:
             booking_id="booking-123",
         )
 
+    def get_available_dates(
+        self,
+        *,
+        start_date,
+        days,
+        business_hours=None,
+        rules=None,
+        now=None,
+    ) -> tuple[date, ...]:
+        return self.available_dates
+
     def get_available_slots_for_date(
         self,
         target_date,
@@ -43,6 +55,36 @@ class FakeBookingService:
         now=None,
     ):
         return self.available_slots
+
+def build_booking_capability(
+    *,
+    available_dates: tuple[date, ...] | None = None,
+) -> BookingCapability:
+    booking_service = FakeBookingService()
+
+    booking_service.available_dates = (
+        available_dates
+        if available_dates is not None
+        else (
+            date.today() + timedelta(days=10),
+            date.today() + timedelta(days=11),
+            date.today() + timedelta(days=12),
+        )
+    )
+
+    business_hours = BusinessHours.standard_week(
+        start=time(9, 0),
+        end=time(18, 0),
+        timezone_name="Europe/Madrid",
+    )
+
+    booking_rules = BookingRules.hourly()
+
+    return BookingCapability(
+        booking_service=booking_service,
+        business_hours=business_hours,
+        booking_rules=booking_rules,
+    ) 
 
 def test_booking_capability_confirms_booking_through_service() -> None:
     booking_service = FakeBookingService()
@@ -55,12 +97,14 @@ def test_booking_capability_confirms_booking_through_service() -> None:
         session_id="user_1",
     )
 
-    context.booking = BookingState(
+    booking_state = BookingState(
         name="Yanko",
         phone="600123123",
         date="28/07/2026",
         time="16:30",
     )
+
+    context.booking = booking_state
 
     context.set_active_capability(
         "booking",
@@ -71,15 +115,27 @@ def test_booking_capability_confirms_booking_through_service() -> None:
         message="sí",
     )
 
-    assert booking_service.received_state is context.booking
-    assert context.booking.confirmed is True
-    assert context.booking.is_complete is True
-    assert context.booking.booking_id == "booking-123"
-    assert context.booking.next_step is BookingStep.COMPLETE
+    assert booking_service.received_state is booking_state
+    assert booking_state.confirmed is True
+    assert booking_state.is_complete is True
+    assert booking_state.booking_id == "booking-123"
+    assert booking_state.next_step is BookingStep.COMPLETE
+
+    assert context.booking is None
+    assert context.active_capability is None
 
     assert response.metadata["handled"] is True
     assert response.metadata["booking_step"] == "complete"
-    assert "Reserva confirmada correctamente" in response.text
+
+    assert (
+        "Tu reserva se ha realizado correctamente"
+        in response.text
+    )
+
+    assert (
+        "Si necesitas algo más, escríbeme directamente"
+        in response.text
+    )
 
 def test_booking_capability_stores_name_and_requests_phone() -> None:
     capability = BookingCapability()
@@ -104,14 +160,27 @@ def test_booking_capability_stores_name_and_requests_phone() -> None:
     )
 
 def test_booking_capability_stores_phone_and_requests_date() -> None:
-    capability = BookingCapability()
-    context = ConversationContext(session_id="user_1")
+    available_dates = (
+        date.today() + timedelta(days=10),
+        date.today() + timedelta(days=11),
+        date.today() + timedelta(days=12),
+    )
+
+    capability = build_booking_capability(
+        available_dates=available_dates,
+    )
+
+    context = ConversationContext(
+        session_id="user_1",
+    )
 
     context.booking = BookingState(
         name="Yanko",
     )
 
-    context.set_active_capability("booking")
+    context.set_active_capability(
+        "booking",
+    )
 
     response = capability.handle(
         context=context,
@@ -120,12 +189,17 @@ def test_booking_capability_stores_phone_and_requests_date() -> None:
 
     assert context.booking.phone == "+34600123123"
     assert context.booking.next_step is BookingStep.DATE
-    assert response.text == (
-        "Tengo disponibilidad para los siguientes días: "
-        "28/07/2026, 29/07/2026, 30/07/2026. "
-        "¿Qué día prefieres?"
+
+    formatted_dates = ", ".join(
+        available_date.strftime("%d/%m/%Y")
+        for available_date in available_dates
     )
 
+    assert response.text == (
+        "Tengo disponibilidad para los siguientes días: "
+        f"{formatted_dates}. "
+        "¿Qué día prefieres?"
+    )
 
 def test_booking_capability_stores_date_and_requests_time() -> None:
     capability = BookingCapability()
@@ -272,7 +346,7 @@ def test_booking_capability_does_not_advance_with_invalid_time() -> None:
 
 
 def test_booking_capability_returns_available_dates_without_advancing() -> None:
-    capability = BookingCapability()
+    capability = build_booking_capability()
     context = ConversationContext(session_id="user_1")
 
     context.booking = BookingState(
@@ -308,7 +382,7 @@ def test_booking_capability_returns_available_dates_without_advancing() -> None:
 def test_booking_capability_recognizes_availability_questions(
     message: str,
 ) -> None:
-    capability = BookingCapability()
+    capability = build_booking_capability()
     context = ConversationContext(session_id="user_1")
 
     context.booking = BookingState(
@@ -330,28 +404,45 @@ def test_booking_capability_recognizes_availability_questions(
 
 def test_booking_capability_confirms_booking() -> None:
     capability = BookingCapability()
-    context = ConversationContext(session_id="user_1")
 
-    context.booking = BookingState(
+    context = ConversationContext(
+        session_id="user_1",
+    )
+
+    booking_state = BookingState(
         name="Yanko",
         phone="600123123",
         date="28/07/2026",
         time="17:00",
     )
 
-    context.set_active_capability("booking")
+    context.booking = booking_state
+
+    context.set_active_capability(
+        "booking",
+    )
 
     response = capability.handle(
         context=context,
         message="sí",
     )
 
-    assert context.booking.confirmed is True
-    assert context.booking.is_complete is True
-    assert context.booking.next_step is BookingStep.COMPLETE
+    assert booking_state.confirmed is True
+    assert booking_state.is_complete is True
+    assert booking_state.next_step is BookingStep.COMPLETE
 
-    assert "Reserva confirmada correctamente" in response.text
+    assert context.booking is None
+    assert context.active_capability is None
 
+    assert (
+        "Tu reserva se ha realizado correctamente"
+        in response.text
+    )
+
+    assert (
+        "Si necesitas algo más, escríbeme directamente"
+        in response.text
+    )
 
 def test_booking_capability_cancels_booking() -> None:
     capability = BookingCapability()
@@ -587,18 +678,39 @@ def test_booking_capability_reports_no_available_dates_after_phone() -> None:
     )
 
 def test_booking_capability_rejects_unavailable_date() -> None:
+    from datetime import datetime, timedelta
+
     capability = BookingCapability()
 
     context = ConversationContext(
         session_id="user_1",
     )
 
+    first_available_date = (
+        datetime.now().date()
+        + timedelta(days=10)
+    )
+
+    second_available_date = (
+        datetime.now().date()
+        + timedelta(days=11)
+    )
+
+    unavailable_date = (
+        datetime.now().date()
+        + timedelta(days=12)
+    )
+
     context.booking = BookingState(
         name="Yanko",
         phone="+34600123123",
         available_dates=(
-            "29/07/2026",
-            "30/07/2026",
+            first_available_date.strftime(
+                "%d/%m/%Y",
+            ),
+            second_available_date.strftime(
+                "%d/%m/%Y",
+            ),
         ),
     )
 
@@ -608,13 +720,14 @@ def test_booking_capability_rejects_unavailable_date() -> None:
 
     response = capability.handle(
         context=context,
-        message="31/07/2026",
+        message=unavailable_date.strftime(
+            "%d/%m/%Y",
+        ),
     )
 
     assert context.booking.date is None
+
     assert (
         "Lo siento, esa fecha no está disponible"
         in response.text
     )
-    assert "29/07/2026" in response.text
-    assert "30/07/2026" in response.text

@@ -11,12 +11,18 @@ class ActivationConfig:
 
     type: str = "always_active"
 
-    phrases: list[str] = field(default_factory=list)
+    phrases: list[str] = field(
+        default_factory=list
+    )
 
     prompt_message: str = (
         "This assistant is not active yet."
     )
 
-    session_timeout: int | None = None
+    activated_message: str = (
+        "Assistant activated."
+    )
 
     prompt_cooldown: int = 60
+
+    session_timeout: int | None = None

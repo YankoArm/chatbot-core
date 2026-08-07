@@ -57,6 +57,3 @@ class WhatsAppMessageHandler:
             )
 
         return response
-
-
-

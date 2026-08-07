@@ -26,6 +26,7 @@ class ActivationFactory:
             policy = ExactPhrasePolicy(
                 phrases=config.phrases,
                 prompt_message=config.prompt_message,
+                activated_message=config.activated_message,
                 prompt_cooldown=timedelta(
                     seconds=config.prompt_cooldown,
                 ),

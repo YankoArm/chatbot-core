@@ -49,8 +49,11 @@ class FlowForgeApplication:
         """
         Process a user message within a conversation session.
 
-        The detected language is persisted in the conversation context and
-        reused during the remainder of the session.
+        Activation rules are evaluated before language detection so
+        activation commands do not determine the conversation language.
+
+        Once the assistant is active, the detected language is persisted
+        and reused during the remainder of the session.
 
         Instance-specific services, such as the knowledge service, are
         attached to the context before conversational processing begins.
@@ -74,11 +77,6 @@ class FlowForgeApplication:
             session_id=normalized_session_id,
         )
 
-        self._ensure_conversation_language(
-            context=context,
-            message=normalized_message,
-        )
-
         activation_response = self._process_activation(
             context=context,
             message=normalized_message,
@@ -86,6 +84,11 @@ class FlowForgeApplication:
 
         if activation_response is not None:
             return activation_response
+
+        self._ensure_conversation_language(
+            context=context,
+            message=normalized_message,
+        )
 
         return self.orchestrator.process(
             context=context,

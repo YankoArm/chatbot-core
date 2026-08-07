@@ -32,6 +32,7 @@ def build_manager(
     policy = ExactPhrasePolicy(
         phrases=["Tarot"],
         prompt_message=PROMPT_MESSAGE,
+        activated_message="Asistente activado.",
     )
 
     return ActivationManager(
@@ -52,9 +53,9 @@ def test_handle_returns_continue_for_activation() -> None:
     decision = manager.handle("Tarot", state)
 
     assert isinstance(decision, ActivationDecision)
-    assert decision.continue_processing is True
-    assert decision.response is None
-
+    assert decision.continue_processing is False
+    assert decision.response is not None
+    assert decision.response.text == "Asistente activado."
 
 def test_handle_returns_continue_for_active_session() -> None:
     clock = MutableClock(
@@ -138,6 +139,8 @@ def test_handle_allows_reactivation_after_timeout() -> None:
         state,
     )
 
-    assert decision.continue_processing is True
-    assert decision.response is None
+    assert decision.continue_processing is False
+    assert decision.response is not None
+    assert decision.response.text == "Asistente activado."
     assert state.active is True
+    

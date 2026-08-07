@@ -149,11 +149,14 @@ _TEXTS = {
             "o «no» para cancelar."
         ),
         "confirmed": (
-            "Reserva confirmada correctamente.\n\n"
+            "Tu reserva se ha realizado correctamente.\n\n"
             "Nombre: {name}\n"
             "Teléfono: {phone}\n"
             "Fecha: {date}\n"
-            "Hora: {time}"
+            "Hora: {time}\n\n"
+            "Ya tienes tu cita reservada.\n\n"
+            "Si necesitas algo más, escríbeme directamente "
+            "qué deseas consultar."
         ),
         "cancelled": (
             "La solicitud de reserva ha sido cancelada. "
@@ -239,11 +242,14 @@ _TEXTS = {
             "or “no” to cancel."
         ),
         "confirmed": (
-            "Your appointment has been confirmed.\n\n"
+            "Your appointment has been booked successfully.\n\n"
             "Name: {name}\n"
             "Phone: {phone}\n"
             "Date: {date}\n"
-            "Time: {time}"
+            "Time: {time}\n\n"
+            "Your appointment is now confirmed.\n\n"
+            "If you need anything else, write directly "
+            "what you would like help with."
         ),
         "cancelled": (
             "The appointment request has been cancelled. "
@@ -644,7 +650,7 @@ class BookingCapability(BaseCapability):
                     ),
                 )
 
-        return self._response(
+        response = self._response(
             context=context,
             text=self._text(
                 context,
@@ -655,6 +661,11 @@ class BookingCapability(BaseCapability):
                 time=booking.time,
             ),
         )
+
+        context.clear_active_capability()
+        context.reset_booking()
+
+        return response
 
     def _get_step_handler(
         self,
@@ -943,11 +954,7 @@ class BookingCapability(BaseCapability):
             or self._business_hours is None
             or self._booking_rules is None
         ):
-            return [
-                "28/07/2026",
-                "29/07/2026",
-                "30/07/2026",
-            ]
+            return []
 
         timezone = ZoneInfo(
             self._business_hours.timezone_name

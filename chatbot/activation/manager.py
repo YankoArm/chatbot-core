@@ -117,14 +117,22 @@ class ActivationManager:
         message: str,
         state: ActivationState,
     ) -> ActivationDecision:
-        result = self.evaluate(message, state)
+        result = self.evaluate(
+            message,
+            state,
+        )
 
-        if result.action in {
-            ActivationAction.ACTIVATE,
-            ActivationAction.CONTINUE,
-        }:
+        if result.action == ActivationAction.CONTINUE:
             return ActivationDecision(
                 continue_processing=True,
+            )
+
+        if result.action == ActivationAction.ACTIVATE:
+            return ActivationDecision(
+                continue_processing=False,
+                response=Response(
+                    text=result.message or "",
+                ),
             )
 
         return ActivationDecision(
