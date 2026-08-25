@@ -388,3 +388,85 @@ def test_calendar_service_skips_dates_without_available_slots() -> None:
         date(2026, 7, 29),
         date(2026, 7, 30),
     )
+
+def test_long_service_is_not_offered_in_a_short_remaining_gap() -> None:
+    from dataclasses import replace
+    from datetime import timedelta
+
+    provider = FakeCalendarProvider()
+
+    provider.list_bookings = lambda **kwargs: [
+        {
+            "start": {
+                "dateTime": "2026-07-28T09:00:00+02:00",
+            },
+            "end": {
+                "dateTime": "2026-07-28T11:30:00+02:00",
+            },
+        }
+    ]
+
+    service = CalendarService(
+        provider=provider,
+    )
+
+    business_hours = BusinessHours.standard_week(
+        start=time(9, 0),
+        end=time(12, 0),
+        timezone_name="Europe/Madrid",
+    )
+
+    default_rules = BookingRules.hourly(
+        slot_interval_minutes=30,
+    )
+
+    short_service_rules = replace(
+        default_rules,
+        appointment_duration=timedelta(
+            minutes=30,
+        ),
+    )
+
+    highlights_rules = replace(
+        default_rules,
+        appointment_duration=timedelta(
+            minutes=120,
+        ),
+    )
+
+    now = datetime(
+        2026,
+        7,
+        28,
+        8,
+        0,
+        tzinfo=ZoneInfo("Europe/Madrid"),
+    )
+
+    short_slots = service.get_available_slots_for_date(
+        date(2026, 7, 28),
+        business_hours=business_hours,
+        rules=short_service_rules,
+        now=now,
+    )
+
+    highlights_slots = service.get_available_slots_for_date(
+        date(2026, 7, 28),
+        business_hours=business_hours,
+        rules=highlights_rules,
+        now=now,
+    )
+
+    short_start_times = {
+        slot.start.strftime("%H:%M")
+        for slot in short_slots
+    }
+
+    highlights_start_times = {
+        slot.start.strftime("%H:%M")
+        for slot in highlights_slots
+    }
+
+    assert "11:30" in short_start_times
+    assert "11:30" not in highlights_start_times
+    assert highlights_slots == ()

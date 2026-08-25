@@ -101,6 +101,14 @@ class BookingService:
                 state.time,
                 "time",
             ),
+            service_id=state.service_id,
+            service_name=state.service_name,
+            duration_minutes=(
+                state.service_duration_minutes
+            ),
+            price_cents=state.service_price_cents,
+            price_type=state.service_price_type,
+            currency=state.service_currency,
         )
 
         calendar_booking_id = (
@@ -247,20 +255,53 @@ class BookingService:
         if self._calendar_service is None:
             return None
 
+        title = (
+            f"{booking.service_name} - {booking.name}"
+            if booking.service_name
+            else f"Booking - {booking.name}"
+        )
+
+        description_lines = []
+
+        if booking.service_name:
+            description_lines.append(
+                f"Service: {booking.service_name}"
+            )
+
+        description_lines.extend(
+            (
+                f"Client: {booking.name}",
+                f"Phone: {booking.phone}",
+            )
+        )
+
+        metadata = {
+            "client_name": booking.name,
+            "client_phone": booking.phone,
+            "booking_date": booking.date,
+            "booking_time": booking.time,
+        }
+
+        if booking.service_id:
+            metadata["service_id"] = booking.service_id
+
+        if booking.service_name:
+            metadata["service_name"] = booking.service_name
+
+        if booking.duration_minutes is not None:
+            metadata["duration_minutes"] = (
+                booking.duration_minutes
+            )
+
         return self._calendar_service.create_booking(
             date=booking.date,
             time=booking.time,
-            title=f"Booking - {booking.name}",
-            description=(
-                f"Client: {booking.name}\n"
-                f"Phone: {booking.phone}"
+            title=title,
+            duration_minutes=booking.duration_minutes,
+            description="\n".join(
+                description_lines
             ),
-            metadata={
-                "client_name": booking.name,
-                "client_phone": booking.phone,
-                "booking_date": booking.date,
-                "booking_time": booking.time,
-            },
+            metadata=metadata,
         )
 
     @staticmethod

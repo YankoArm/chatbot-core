@@ -14,6 +14,9 @@ from chatbot.availability import (
 class FakeBookingService:
     def __init__(self) -> None:
         self.received_state: BookingState | None = None
+        self.received_creation_rules: BookingRules | None = None
+        self.received_date_rules: BookingRules | None = None
+        self.received_slot_rules: BookingRules | None = None
         self.raise_slot_unavailable = False
         self.available_slots = ()
         self.available_dates: tuple[date, ...] = ()
@@ -27,6 +30,7 @@ class FakeBookingService:
         now=None,
     ) -> None:
         self.received_state = state
+        self.received_creation_rules = rules
 
         if self.raise_slot_unavailable:
             raise BookingSlotUnavailableError()
@@ -44,6 +48,8 @@ class FakeBookingService:
         rules=None,
         now=None,
     ) -> tuple[date, ...]:
+        self.received_date_rules = rules
+
         return self.available_dates
 
     def get_available_slots_for_date(
@@ -54,6 +60,8 @@ class FakeBookingService:
         rules=None,
         now=None,
     ):
+        self.received_slot_rules = rules
+
         return self.available_slots
 
 def build_booking_capability(
@@ -965,3 +973,107 @@ def test_confirmed_booking_includes_selected_service() -> None:
     assert "Nombre: Yanko" in response.text
     assert "Fecha: 28/07/2026" in response.text
     assert "Hora: 17:00" in response.text
+
+
+def test_service_duration_is_used_when_requesting_available_dates() -> None:
+    booking_service = FakeBookingService()
+    booking_service.available_dates = (
+        date.today() + timedelta(days=10),
+    )
+
+    business_hours = BusinessHours.standard_week(
+        start=time(9, 0),
+        end=time(18, 0),
+        timezone_name="Europe/Madrid",
+    )
+    booking_rules = BookingRules.hourly()
+
+    capability = BookingCapability(
+        booking_service=booking_service,
+        business_hours=business_hours,
+        booking_rules=booking_rules,
+    )
+
+    context = ConversationContext(
+        session_id="highlights-available-dates",
+    )
+    context.booking = BookingState(
+        requires_service_selection=True,
+        service_id="highlights",
+        service_name="Mechas",
+        service_duration_minutes=120,
+        service_price_cents=6500,
+        service_price_type="from",
+        service_currency="EUR",
+        name="Yanko",
+    )
+    context.set_active_capability(
+        "booking",
+    )
+
+    capability.handle(
+        context=context,
+        message="600123123",
+    )
+
+    assert booking_service.received_date_rules is not None
+    assert (
+        booking_service.received_date_rules.appointment_duration
+        == timedelta(minutes=120)
+    )
+    assert (
+        booking_rules.appointment_duration
+        == timedelta(minutes=60)
+    )
+
+
+def test_service_duration_is_used_when_confirming_booking() -> None:
+    booking_service = FakeBookingService()
+
+    business_hours = BusinessHours.standard_week(
+        start=time(9, 0),
+        end=time(18, 0),
+        timezone_name="Europe/Madrid",
+    )
+    booking_rules = BookingRules.hourly()
+
+    capability = BookingCapability(
+        booking_service=booking_service,
+        business_hours=business_hours,
+        booking_rules=booking_rules,
+    )
+
+    context = ConversationContext(
+        session_id="highlights-confirmation-duration",
+    )
+    context.booking = BookingState(
+        requires_service_selection=True,
+        service_id="highlights",
+        service_name="Mechas",
+        service_duration_minutes=120,
+        service_price_cents=6500,
+        service_price_type="from",
+        service_currency="EUR",
+        name="Yanko",
+        phone="+34600123123",
+        date="28/07/2026",
+        time="17:00",
+    )
+    context.set_active_capability(
+        "booking",
+    )
+
+    capability.handle(
+        context=context,
+        message="sí",
+    )
+
+    assert booking_service.received_creation_rules is not None
+    assert (
+        booking_service.received_creation_rules.appointment_duration
+        == timedelta(minutes=120)
+    )
+    assert (
+        booking_rules.appointment_duration
+        == timedelta(minutes=60)
+    )

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from dataclasses import replace
+
 from chatbot.phone import (
     PhoneNumberError,
     PhoneNumberService,
@@ -15,7 +17,7 @@ from chatbot.availability import (
 )
 
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Callable
 
 from chatbot.booking.services import BookableService
@@ -661,7 +663,9 @@ class BookingCapability(BaseCapability):
         date = message.strip()
 
         if self._asks_for_available_dates(date):
-            available_dates = self._get_available_dates()
+            available_dates = self._get_available_dates(
+                context=context,
+            )
 
             if not available_dates:
                 return self._response(
@@ -714,7 +718,9 @@ class BookingCapability(BaseCapability):
         context.booking.date = date
 
         available_times = self._get_available_times(
-            date)
+            date,
+            context=context,
+        )
 
         if available_times is None:
             return self._response(
@@ -843,7 +849,9 @@ class BookingCapability(BaseCapability):
                 self._booking_service.create_booking_from_state(
                     booking,
                     business_hours=self._business_hours,
-                    rules=self._booking_rules,
+                    rules=self._get_effective_booking_rules(
+                        context
+                    ),
                 )
             except BookingSlotUnavailableError:
                 date_value = booking.date
@@ -854,7 +862,8 @@ class BookingCapability(BaseCapability):
                     )
 
                 available_times = self._get_available_times(
-                    date_value
+                    date_value,
+                    context=context,
                 )
 
                 booking.time = None
@@ -1199,40 +1208,79 @@ class BookingCapability(BaseCapability):
             normalized,
         ).strip()
 
+    def _get_effective_booking_rules(
+        self,
+        context: Any | None,
+    ) -> BookingRules | None:
+        """
+        Return booking rules adjusted to the selected service duration.
+
+        Generic bookings preserve the configured default duration.
+        """
+
+        if self._booking_rules is None:
+            return None
+
+        booking = getattr(
+            context,
+            "booking",
+            None,
+        )
+        duration_minutes = getattr(
+            booking,
+            "service_duration_minutes",
+            None,
+        )
+
+        if duration_minutes is None:
+            return self._booking_rules
+
+        return replace(
+            self._booking_rules,
+            appointment_duration=timedelta(
+                minutes=duration_minutes,
+            ),
+        )
+
     def _get_available_dates(
         self,
+        context: Any | None = None,
         *,
         days: int = 30,
     ) -> list[str]:
         """
-        Return formatted available dates.
+        Return formatted dates containing a slot long enough for the
+        selected service.
 
-        Uses CalendarService when available and falls back to
-        the temporary hardcoded dates otherwise.
+        When no service has been selected, the configured default
+        appointment duration is used.
         """
+
+        effective_rules = (
+            self._get_effective_booking_rules(
+                context
+            )
+        )
 
         if (
             self._booking_service is None
             or self._business_hours is None
-            or self._booking_rules is None
+            or effective_rules is None
         ):
             return []
 
         timezone = ZoneInfo(
             self._business_hours.timezone_name
         )
+        now = datetime.now(timezone)
 
         available_dates = (
             self._booking_service.get_available_dates(
-                start_date=datetime.now(
-                    timezone,
-                ).date(),
+                start_date=now.date(),
                 days=days,
                 business_hours=self._business_hours,
-                rules=self._booking_rules,
-                now=datetime.now(
-                    timezone,
-                ),
+                rules=effective_rules,
+                now=now,
             )
         )
 
@@ -1247,7 +1295,9 @@ class BookingCapability(BaseCapability):
         self,
         context: Any,
     ) -> str:
-        available_dates = self._get_available_dates()
+        available_dates = self._get_available_dates(
+            context=context,
+        )
 
         context.booking.available_dates = tuple(
             available_dates
@@ -1270,18 +1320,25 @@ class BookingCapability(BaseCapability):
     def _get_available_times(
         self,
         date_value: str,
+        *,
+        context: Any | None = None,
     ) -> tuple[str, ...] | None:
         """
-        Return formatted available times when availability
-        integration is configured.
+        Return formatted available times for the selected service.
 
         None means that availability integration is disabled.
         """
 
+        effective_rules = (
+            self._get_effective_booking_rules(
+                context
+            )
+        )
+
         if (
             self._booking_service is None
             or self._business_hours is None
-            or self._booking_rules is None
+            or effective_rules is None
         ):
             return None
 
@@ -1299,7 +1356,7 @@ class BookingCapability(BaseCapability):
             .get_available_slots_for_date(
                 target_date,
                 business_hours=self._business_hours,
-                rules=self._booking_rules,
+                rules=effective_rules,
                 now=datetime.now(timezone),
             )
         )

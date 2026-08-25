@@ -565,3 +565,88 @@ def test_get_available_slots_for_date_returns_empty_without_calendar(
     )
 
     assert result == ()
+
+
+def test_booking_service_creates_service_aware_calendar_event() -> None:
+    repository = FakeBookingRepository()
+    calendar_provider = InMemoryCalendarProvider()
+
+    calendar_service = CalendarService(
+        provider=calendar_provider,
+    )
+
+    service = BookingService(
+        repository=repository,
+        calendar_service=calendar_service,
+    )
+
+    state = BookingState(
+        requires_service_selection=True,
+        service_id="highlights",
+        service_name="Mechas",
+        service_duration_minutes=120,
+        service_price_cents=6500,
+        service_price_type="from",
+        service_currency="EUR",
+        name="Yanko",
+        phone="+34600123123",
+        date="25/07/2026",
+        time="16:30",
+    )
+
+    booking = service.create_booking_from_state(
+        state,
+    )
+
+    assert repository.saved_booking == booking
+    assert booking.service_id == "highlights"
+    assert booking.service_name == "Mechas"
+    assert booking.duration_minutes == 120
+    assert booking.price_cents == 6500
+    assert booking.price_type == "from"
+    assert booking.currency == "EUR"
+
+    bookings = calendar_provider.list_bookings(
+        start=datetime(
+            2026,
+            7,
+            25,
+            16,
+            0,
+        ),
+        end=datetime(
+            2026,
+            7,
+            25,
+            19,
+            0,
+        ),
+    )
+
+    assert len(bookings) == 1
+    assert bookings[0]["start"] == datetime(
+        2026,
+        7,
+        25,
+        16,
+        30,
+    )
+    assert bookings[0]["end"] == datetime(
+        2026,
+        7,
+        25,
+        18,
+        30,
+    )
+    assert bookings[0]["title"] == (
+        "Mechas - Yanko"
+    )
+    assert "Service: Mechas" in bookings[0]["description"]
+    assert "Phone: +34600123123" in bookings[0]["description"]
+    assert bookings[0]["metadata"]["service_id"] == (
+        "highlights"
+    )
+    assert bookings[0]["metadata"]["service_name"] == (
+        "Mechas"
+    )
+    assert bookings[0]["metadata"]["duration_minutes"] == 120
