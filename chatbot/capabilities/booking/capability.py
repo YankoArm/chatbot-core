@@ -18,6 +18,7 @@ import unicodedata
 from datetime import datetime
 from typing import Any, Callable
 
+from chatbot.booking.services import BookableService
 from chatbot.booking import (
     BookingService,
     BookingSlotUnavailableError,
@@ -120,8 +121,9 @@ _TEXTS = {
             "Inténtalo de nuevo más adelante."
         ),
         "available_dates": (
-            "Tengo disponibilidad para los siguientes días: "
-            "{dates}. ¿Qué día prefieres?"
+            "Tengo disponibilidad para las próximas fechas: "
+            "{dates}. ¿Qué día prefieres? "
+            "Si necesitas una fecha posterior, dímelo."
         ),
         "selected_date_unavailable": (
             "Lo siento, esa fecha no está disponible. "
@@ -140,6 +142,7 @@ _TEXTS = {
         ),
         "confirmation_summary": (
             "Estos son los datos de tu reserva:\n\n"
+            "{service_line}"
             "Nombre: {name}\n"
             "Teléfono: {phone}\n"
             "Fecha: {date}\n"
@@ -150,6 +153,7 @@ _TEXTS = {
         ),
         "confirmed": (
             "Tu reserva se ha realizado correctamente.\n\n"
+            "{service_line}"
             "Nombre: {name}\n"
             "Teléfono: {phone}\n"
             "Fecha: {date}\n"
@@ -211,8 +215,9 @@ _TEXTS = {
             "Please try again later."
         ),
         "available_dates": (
-            "I have availability on the following dates: "
-            "{dates}. Which date would you prefer?"
+            "My next available dates are: "
+            "{dates}. Which date would you prefer? "
+            "If you need a later date, let me know."
         ),
         "selected_date_unavailable": (
             "Sorry, that date is not available. "
@@ -233,6 +238,7 @@ _TEXTS = {
         ),
         "confirmation_summary": (
             "Here are your appointment details:\n\n"
+            "{service_line}"
             "Name: {name}\n"
             "Phone: {phone}\n"
             "Date: {date}\n"
@@ -243,6 +249,7 @@ _TEXTS = {
         ),
         "confirmed": (
             "Your appointment has been booked successfully.\n\n"
+            "{service_line}"
             "Name: {name}\n"
             "Phone: {phone}\n"
             "Date: {date}\n"
@@ -295,10 +302,12 @@ class BookingCapability(BaseCapability):
         phone_service: PhoneNumberService | None = None,
         business_hours: BusinessHours | None = None,
         booking_rules: BookingRules | None = None,
+        services: tuple[BookableService, ...] = (),
     ) -> None:
         self._booking_service = booking_service
         self._business_hours = business_hours
         self._booking_rules = booking_rules
+        self._services = tuple(services)
 
         self._phone_service = (
             phone_service
@@ -345,7 +354,10 @@ class BookingCapability(BaseCapability):
                     context
                 )
 
-            return self._start_booking(context)
+            return self._start_booking(
+                context,
+                message,
+            )
 
         handler = self._get_step_handler(
             context.booking.next_step
@@ -383,22 +395,208 @@ class BookingCapability(BaseCapability):
                 context,
                 "available_dates",
                 dates=", ".join(
-                    available_dates
+                    available_dates[:5]
                 ),
             ),
         )
     def _start_booking(
         self,
         context: Any,
+        message: str,
     ) -> Response:
-        context.booking = BookingState()
+        context.booking = BookingState(
+            requires_service_selection=bool(
+                self._services
+            ),
+        )
+
+        if not self._services:
+            return self._response(
+                context=context,
+                text=self._text(
+                    context,
+                    "start",
+                ),
+            )
+
+        service = self._find_service(message)
+
+        if service is not None:
+            self._select_service(
+                context,
+                service,
+            )
+
+            return self._response(
+                context=context,
+                text=self._service_selected_text(
+                    context,
+                    service,
+                ),
+            )
 
         return self._response(
             context=context,
-            text=self._text(
-                context,
-                "start",
+            text=self._build_service_menu(
+                context
             ),
+        )
+
+    def _handle_service(
+        self,
+        context: Any,
+        message: str,
+    ) -> Response:
+        service = self._find_service(message)
+
+        if service is None:
+            return self._response(
+                context=context,
+                text=self._build_service_menu(
+                    context
+                ),
+            )
+
+        self._select_service(
+            context,
+            service,
+        )
+
+        return self._response(
+            context=context,
+            text=self._service_selected_text(
+                context,
+                service,
+            ),
+        )
+
+    def _find_service(
+        self,
+        message: str,
+    ) -> BookableService | None:
+        normalized_message = self._normalize_text(
+            message
+        )
+
+        for service in self._services:
+            candidates = (
+                service.id,
+                service.name_es,
+                service.name_en,
+            )
+
+            for candidate in candidates:
+                normalized_candidate = (
+                    self._normalize_text(candidate)
+                )
+
+                if (
+                    normalized_candidate
+                    and normalized_candidate
+                    in normalized_message
+                ):
+                    return service
+
+        return None
+
+    @staticmethod
+    def _select_service(
+        context: Any,
+        service: BookableService,
+    ) -> None:
+        booking = context.booking
+
+        booking.service_id = service.id
+        booking.service_name = service.name_es
+        booking.service_duration_minutes = (
+            service.duration_minutes
+        )
+        booking.service_price_cents = (
+            service.price_cents
+        )
+        booking.service_price_type = (
+            service.price_type
+        )
+        booking.service_currency = (
+            service.currency
+        )
+
+    def _build_service_menu(
+        self,
+        context: Any,
+    ) -> str:
+        language = self._get_language(context)
+
+        if language is Language.EN:
+            heading = "Which service would you like to book?"
+        else:
+            heading = "¿Qué servicio quieres reservar?"
+
+        lines = [
+            heading,
+            "",
+        ]
+
+        for service in self._services:
+            if language is Language.EN:
+                service_name = service.name_en
+                price_prefix = (
+                    "from "
+                    if service.price_type == "from"
+                    else ""
+                )
+            else:
+                service_name = service.name_es
+                price_prefix = (
+                    "desde "
+                    if service.price_type == "from"
+                    else ""
+                )
+
+            lines.append(
+                "- "
+                f"{service_name}: "
+                f"{price_prefix}"
+                f"{self._format_service_price(service)}"
+            )
+
+        return "\n".join(lines)
+
+    def _service_selected_text(
+        self,
+        context: Any,
+        service: BookableService,
+    ) -> str:
+        if self._get_language(context) is Language.EN:
+            return (
+                f"Perfect. You have selected {service.name_en}. "
+                "What is your name?"
+            )
+
+        return (
+            f"Perfecto. Has elegido {service.name_es}. "
+            "¿Cómo te llamas?"
+        )
+
+    @staticmethod
+    def _format_service_price(
+        service: BookableService,
+    ) -> str:
+        amount = service.price_cents / 100
+
+        if amount.is_integer():
+            formatted_amount = str(int(amount))
+        else:
+            formatted_amount = (
+                f"{amount:.2f}".replace(".", ",")
+            )
+
+        if service.currency == "EUR":
+            return f"{formatted_amount} €"
+
+        return (
+            f"{formatted_amount} "
+            f"{service.currency}"
         )
 
     def _handle_name(
@@ -479,7 +677,9 @@ class BookingCapability(BaseCapability):
                 text=self._text(
                     context,
                     "available_dates",
-                    dates=", ".join(available_dates),
+                    dates=", ".join(
+                    available_dates[:5]
+                ),
                 ),
             )
 
@@ -506,8 +706,8 @@ class BookingCapability(BaseCapability):
                     context,
                     "selected_date_unavailable",
                     dates=", ".join(
-                        available_dates
-                    ),
+                    available_dates[:5]
+                ),
                 ),
             )
 
@@ -709,6 +909,7 @@ class BookingCapability(BaseCapability):
             BookingStep,
             Callable[[Any, str], Response],
         ] = {
+            BookingStep.SERVICE: self._handle_service,
             BookingStep.NAME: self._handle_name,
             BookingStep.PHONE: self._handle_phone,
             BookingStep.DATE: self._handle_date,
@@ -766,6 +967,33 @@ class BookingCapability(BaseCapability):
         **values: Any,
     ) -> str:
         language = cls._get_language(context)
+        booking = getattr(
+            context,
+            "booking",
+            None,
+        )
+        service_name = getattr(
+            booking,
+            "service_name",
+            None,
+        )
+
+        if service_name:
+            service_label = (
+                "Service"
+                if language is Language.EN
+                else "Servicio"
+            )
+
+            values.setdefault(
+                "service_line",
+                f"{service_label}: {service_name}\n",
+            )
+        else:
+            values.setdefault(
+                "service_line",
+                "",
+            )
 
         template = _TEXTS[language][key]
 
@@ -1035,8 +1263,8 @@ class BookingCapability(BaseCapability):
             context,
             "available_dates",
             dates=", ".join(
-                available_dates
-            ),
+                    available_dates[:5]
+                ),
         )
 
     def _get_available_times(

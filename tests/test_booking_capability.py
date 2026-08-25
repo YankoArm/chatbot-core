@@ -196,9 +196,10 @@ def test_booking_capability_stores_phone_and_requests_date() -> None:
     )
 
     assert response.text == (
-        "Tengo disponibilidad para los siguientes días: "
+        "Tengo disponibilidad para las próximas fechas: "
         f"{formatted_dates}. "
-        "¿Qué día prefieres?"
+        "¿Qué día prefieres? "
+        "Si necesitas una fecha posterior, dímelo."
     )
 
 def test_booking_capability_stores_date_and_requests_time() -> None:
@@ -781,3 +782,186 @@ def test_booking_capability_answers_initial_availability_question() -> None:
         "booking_step": "inactive",
         "language": "es",
     }
+
+def test_initial_availability_shows_only_next_five_dates() -> None:
+    available_dates = tuple(
+        date.today() + timedelta(days=day_offset)
+        for day_offset in range(10, 17)
+    )
+
+    capability = build_booking_capability(
+        available_dates=available_dates,
+    )
+
+    context = ConversationContext(
+        session_id="limited-initial-availability",
+    )
+
+    response = capability.handle(
+        context=context,
+        message="¿Qué fechas tenéis disponibles?",
+    )
+
+    for available_date in available_dates[:5]:
+        assert (
+            available_date.strftime("%d/%m/%Y")
+            in response.text
+        )
+
+    assert (
+        available_dates[5].strftime("%d/%m/%Y")
+        not in response.text
+    )
+
+    assert "fecha posterior" in response.text
+
+def test_booking_capability_requests_service_when_catalog_exists() -> None:
+    from chatbot.booking.services import BookableService
+
+    highlights = BookableService(
+        id="highlights",
+        name_es="Mechas",
+        name_en="Highlights",
+        duration_minutes=120,
+        price_type="from",
+        price_cents=6500,
+        currency="EUR",
+    )
+
+    capability = BookingCapability(
+        services=(
+            highlights,
+        ),
+    )
+
+    context = ConversationContext(
+        session_id="service-selection-start",
+    )
+
+    response = capability.handle(
+        context=context,
+        message="Quiero reservar",
+    )
+
+    assert context.booking is not None
+    assert context.booking.requires_service_selection is True
+    assert context.booking.next_step is BookingStep.SERVICE
+    assert "¿Qué servicio quieres reservar?" in response.text
+    assert "Mechas" in response.text
+    assert "desde 65 €" in response.text
+
+
+def test_booking_capability_selects_service_from_initial_message() -> None:
+    from chatbot.booking.services import BookableService
+
+    highlights = BookableService(
+        id="highlights",
+        name_es="Mechas",
+        name_en="Highlights",
+        duration_minutes=120,
+        price_type="from",
+        price_cents=6500,
+        currency="EUR",
+    )
+
+    capability = BookingCapability(
+        services=(
+            highlights,
+        ),
+    )
+
+    context = ConversationContext(
+        session_id="service-selection-from-message",
+    )
+
+    response = capability.handle(
+        context=context,
+        message="Quiero reservar unas mechas",
+    )
+
+    assert context.booking is not None
+    assert context.booking.service_id == "highlights"
+    assert context.booking.service_name == "Mechas"
+    assert context.booking.service_duration_minutes == 120
+    assert context.booking.service_price_cents == 6500
+    assert context.booking.service_price_type == "from"
+    assert context.booking.service_currency == "EUR"
+    assert context.booking.next_step is BookingStep.NAME
+
+    assert response.text == (
+        "Perfecto. Has elegido Mechas. "
+        "¿Cómo te llamas?"
+    )
+
+def test_booking_summary_includes_selected_service() -> None:
+    capability = BookingCapability()
+
+    context = ConversationContext(
+        session_id="service-summary",
+    )
+
+    context.booking = BookingState(
+        requires_service_selection=True,
+        service_id="highlights",
+        service_name="Mechas",
+        service_duration_minutes=120,
+        service_price_cents=6500,
+        service_price_type="from",
+        service_currency="EUR",
+        name="Yanko",
+        phone="600123123",
+        date="28/07/2026",
+    )
+
+    context.set_active_capability(
+        "booking",
+    )
+
+    response = capability.handle(
+        context=context,
+        message="17:00",
+    )
+
+    assert context.booking.next_step is BookingStep.CONFIRMATION
+    assert "Servicio: Mechas" in response.text
+    assert "Nombre: Yanko" in response.text
+    assert "Fecha: 28/07/2026" in response.text
+    assert "Hora: 17:00" in response.text
+
+
+def test_confirmed_booking_includes_selected_service() -> None:
+    capability = BookingCapability()
+
+    context = ConversationContext(
+        session_id="confirmed-service-summary",
+    )
+
+    context.booking = BookingState(
+        requires_service_selection=True,
+        service_id="highlights",
+        service_name="Mechas",
+        service_duration_minutes=120,
+        service_price_cents=6500,
+        service_price_type="from",
+        service_currency="EUR",
+        name="Yanko",
+        phone="600123123",
+        date="28/07/2026",
+        time="17:00",
+    )
+
+    context.set_active_capability(
+        "booking",
+    )
+
+    response = capability.handle(
+        context=context,
+        message="sí",
+    )
+
+    assert context.booking is None
+    assert "Tu reserva se ha realizado correctamente" in response.text
+    assert "Servicio: Mechas" in response.text
+    assert "Nombre: Yanko" in response.text
+    assert "Fecha: 28/07/2026" in response.text
+    assert "Hora: 17:00" in response.text

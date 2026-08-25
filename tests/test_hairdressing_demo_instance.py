@@ -105,3 +105,29 @@ def test_hairdressing_demo_answers_services_and_prices():
     assert response.metadata["handled"] is True
     assert response.metadata["answer_found"] is True
     assert response.metadata["language"] == "es"
+
+
+def test_hairdressing_demo_answers_specific_service_price():
+    app = build_hairdressing_demo_application()
+    session_id = "hairdressing-highlights-price-session"
+
+    app.chat(
+        session_id=session_id,
+        message="Peluquería",
+    )
+
+    response = app.chat(
+        session_id=session_id,
+        message="¿Cuánto cuestan las mechas?",
+    )
+
+    assert response.text == (
+        "Las mechas cuestan desde 65 € y suelen durar "
+        "aproximadamente 2 horas. El precio final puede "
+        "variar según el largo y las características "
+        "del cabello."
+    )
+
+    assert response.metadata["capability"] == "faq"
+    assert response.metadata["answer_found"] is True
+    assert response.metadata["language"] == "es"

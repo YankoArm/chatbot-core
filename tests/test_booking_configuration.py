@@ -166,3 +166,48 @@ def test_booking_configuration_rejects_invalid_duration() -> None:
         build_booking_configuration(
             instance
         )
+
+def test_booking_configuration_has_empty_services_by_default() -> None:
+    instance = build_instance(
+        booking_settings=valid_booking_settings(),
+    )
+
+    configuration = build_booking_configuration(
+        instance
+    )
+
+    assert configuration.services == ()
+
+
+def test_booking_configuration_builds_hairdressing_services() -> None:
+    from chatbot.business_templates import (
+        create_hairdressing_template,
+    )
+    from chatbot.clients import (
+        create_hairdressing_demo_definition,
+    )
+    from chatbot.instances import InstanceResolver
+
+    instance = InstanceResolver().resolve(
+        template=create_hairdressing_template(),
+        definition=create_hairdressing_demo_definition(),
+    )
+
+    configuration = build_booking_configuration(
+        instance
+    )
+
+    assert len(configuration.services) == 7
+
+    highlights = next(
+        service
+        for service in configuration.services
+        if service.id == "highlights"
+    )
+
+    assert highlights.name_es == "Mechas"
+    assert highlights.name_en == "Highlights"
+    assert highlights.duration_minutes == 120
+    assert highlights.price_type == "from"
+    assert highlights.price_cents == 6500
+    assert highlights.currency == "EUR"

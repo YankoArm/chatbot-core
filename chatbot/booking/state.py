@@ -9,6 +9,7 @@ class BookingStep(str, Enum):
     Steps required to complete a booking request.
     """
 
+    SERVICE = "service"
     NAME = "name"
     PHONE = "phone"
     DATE = "date"
@@ -22,10 +23,18 @@ class BookingState:
     """
     Runtime state of an ongoing booking conversation.
 
-    The state contains both the information collected from the user,
-    the available times offered during the conversation,
-    and the identifiers generated when the booking is confirmed.
+    Service selection is optional so generic appointment businesses
+    can preserve the original name-first booking flow.
     """
+
+    requires_service_selection: bool = False
+
+    service_id: str | None = None
+    service_name: str | None = None
+    service_duration_minutes: int | None = None
+    service_price_cents: int | None = None
+    service_price_type: str | None = None
+    service_currency: str | None = None
 
     name: str | None = None
     phone: str | None = None
@@ -44,6 +53,12 @@ class BookingState:
         """
         Return whether all mandatory booking information has been collected.
         """
+
+        if (
+            self.requires_service_selection
+            and not self.service_id
+        ):
+            return False
 
         return all(
             (
@@ -67,6 +82,12 @@ class BookingState:
         """
         Return the next step required by the booking flow.
         """
+
+        if (
+            self.requires_service_selection
+            and not self.service_id
+        ):
+            return BookingStep.SERVICE
 
         if not self.name:
             return BookingStep.NAME
@@ -109,11 +130,21 @@ class BookingState:
         Restore the booking state to its initial values.
         """
 
+        self.service_id = None
+        self.service_name = None
+        self.service_duration_minutes = None
+        self.service_price_cents = None
+        self.service_price_type = None
+        self.service_currency = None
+
         self.name = None
         self.phone = None
         self.date = None
         self.time = None
+
         self.available_times = ()
+        self.available_dates = ()
+
         self.confirmed = False
         self.notes = None
         self.booking_id = None

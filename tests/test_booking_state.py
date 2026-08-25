@@ -97,3 +97,71 @@ def test_booking_state_starts_without_available_dates() -> None:
     booking = BookingState()
 
     assert booking.available_dates == ()
+
+def test_booking_state_starts_at_service_when_required() -> None:
+    state = BookingState(
+        requires_service_selection=True,
+    )
+
+    assert state.service_id is None
+    assert state.service_name is None
+    assert state.next_step is BookingStep.SERVICE
+    assert state.has_required_data is False
+
+
+def test_booking_state_advances_after_service_selection() -> None:
+    state = BookingState(
+        requires_service_selection=True,
+        service_id="highlights",
+        service_name="Mechas",
+        service_duration_minutes=120,
+        service_price_cents=6500,
+        service_price_type="from",
+        service_currency="EUR",
+    )
+
+    assert state.next_step is BookingStep.NAME
+
+
+def test_booking_state_requires_selected_service_to_complete() -> None:
+    state = BookingState(
+        requires_service_selection=True,
+        name="Yanko",
+        phone="+34600123123",
+        date="28/08/2026",
+        time="17:00",
+    )
+
+    assert state.has_required_data is False
+
+    state.service_id = "highlights"
+    state.service_name = "Mechas"
+    state.service_duration_minutes = 120
+    state.service_price_cents = 6500
+    state.service_price_type = "from"
+    state.service_currency = "EUR"
+
+    assert state.has_required_data is True
+
+
+def test_booking_state_reset_clears_service_selection() -> None:
+    state = BookingState(
+        requires_service_selection=True,
+        service_id="highlights",
+        service_name="Mechas",
+        service_duration_minutes=120,
+        service_price_cents=6500,
+        service_price_type="from",
+        service_currency="EUR",
+        name="Yanko",
+    )
+
+    state.reset()
+
+    assert state.service_id is None
+    assert state.service_name is None
+    assert state.service_duration_minutes is None
+    assert state.service_price_cents is None
+    assert state.service_price_type is None
+    assert state.service_currency is None
+    assert state.next_step is BookingStep.SERVICE

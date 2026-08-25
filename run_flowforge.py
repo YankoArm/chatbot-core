@@ -81,6 +81,9 @@ def create_app(
                 booking_rules=(
                     booking_configuration.booking_rules
                 ),
+                services=(
+                    booking_configuration.services
+                ),
             )
         )
     else:

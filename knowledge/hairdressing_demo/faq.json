@@ -1,4 +1,19 @@
 {
+  "highlights_price": {
+    "keywords": [
+      "precio de las mechas",
+      "cuanto cuestan las mechas",
+      "cuanto valen las mechas",
+      "mechas precio",
+      "highlights price",
+      "how much are highlights",
+      "how much do highlights cost"
+    ],
+    "answers": {
+      "es": "Las mechas cuestan desde 65 € y suelen durar aproximadamente 2 horas. El precio final puede variar según el largo y las características del cabello.",
+      "en": "Highlights start from €65 and usually take approximately 2 hours. The final price may vary depending on hair length and characteristics."
+    }
+  },
   "services_and_prices": {
     "keywords": [
       "servicios y precios",

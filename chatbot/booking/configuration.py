@@ -12,6 +12,10 @@ from chatbot.availability import (
     Weekday,
 )
 from chatbot.instances import Instance
+from chatbot.booking.services import (
+    BookableService,
+    build_bookable_services,
+)
 
 
 _WEEKDAYS_BY_NAME = {
@@ -33,6 +37,7 @@ class BookingConfiguration:
 
     business_hours: BusinessHours
     booking_rules: BookingRules
+    services: tuple[BookableService, ...] = ()
 
 
 def build_booking_configuration(
@@ -98,9 +103,16 @@ def build_booking_configuration(
         rules_settings
     )
 
+    services = build_bookable_services(
+        instance.settings.get(
+            "services",
+        )
+    )
+
     return BookingConfiguration(
         business_hours=business_hours,
         booking_rules=booking_rules,
+        services=services,
     )
 
 

@@ -92,6 +92,9 @@ def main(
                 booking_rules=(
                     booking_configuration.booking_rules
                 ),
+                services=(
+                    booking_configuration.services
+                ),
             ),
         },
     )
