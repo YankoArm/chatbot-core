@@ -15,15 +15,18 @@ class WhatsAppConfig:
     verify_token: str
     app_secret: str
 
+
 @dataclass(frozen=True)
 class ServerConfig:
     host: str
     port: int
 
+
 @dataclass(frozen=True)
 class FlowForgeConfig:
     whatsapp: WhatsAppConfig
     server: ServerConfig
+    client_id: str = "tarot_alvin"
 
     @classmethod
     def load(cls) -> "FlowForgeConfig":
@@ -55,7 +58,12 @@ class FlowForgeConfig:
                     ),
                 ),
             ),
+            client_id=_environment_text(
+                "FLOWFORGE_CLIENT_ID",
+                "tarot_alvin",
+            ),
         )
+
 
 def _required_environment_variable(
     name: str,
@@ -69,25 +77,38 @@ def _required_environment_variable(
 
     return value
 
+
 def _environment_integer(
-        name: str,
-        default: int,
-    ) -> int:
-        raw_value = os.getenv(name)
+    name: str,
+    default: int,
+) -> int:
+    raw_value = os.getenv(name)
 
-        if raw_value is None or not raw_value.strip():
-            return default
+    if raw_value is None or not raw_value.strip():
+        return default
 
-        try:
-            value = int(raw_value)
-        except ValueError as exc:
-            raise MissingConfigurationError(
-                f"{name} must be a valid integer"
-            ) from exc
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise MissingConfigurationError(
+            f"{name} must be a valid integer"
+        ) from exc
 
-        if not 1 <= value <= 65535:
-            raise MissingConfigurationError(
-                f"{name} must be between 1 and 65535"
-            )
+    if not 1 <= value <= 65535:
+        raise MissingConfigurationError(
+            f"{name} must be between 1 and 65535"
+        )
 
-        return value
+    return value
+
+
+def _environment_text(
+    name: str,
+    default: str,
+) -> str:
+    raw_value = os.getenv(name)
+
+    if raw_value is None or not raw_value.strip():
+        return default
+
+    return raw_value.strip()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 
 import uvicorn
 from fastapi import FastAPI
@@ -10,17 +11,22 @@ from chatbot.application import Bootstrap
 from chatbot.booking import (
     BookingService,
     InMemoryBookingRepository,
+    build_booking_configuration,
 )
 from chatbot.calendar import CalendarService
 from chatbot.capabilities.booking import BookingCapability
+from chatbot.clients.registry import build_client_instance
 from chatbot.connectors.whatsapp.bootstrap import (
     WhatsAppGraphClientProtocol,
     build_whatsapp_message_handler,
 )
-from chatbot.connectors.whatsapp.graph_client import WhatsAppGraphClient
-from chatbot.connectors.whatsapp.signature import WhatsAppSignatureVerifier
+from chatbot.connectors.whatsapp.graph_client import (
+    WhatsAppGraphClient,
+)
+from chatbot.connectors.whatsapp.signature import (
+    WhatsAppSignatureVerifier,
+)
 from chatbot.infrastructure.config import FlowForgeConfig
-from chatbot.instances import Instance
 from run_google_calendar import build_calendar_service
 
 
@@ -36,43 +42,64 @@ def create_app(
     """
     Build the production FlowForge WhatsApp application.
 
-    Dependencies are received explicitly so the production
-    composition can be tested without connecting to Meta or
-    Google Calendar.
+    The configured client is loaded from the central client registry.
+    Dependencies are received explicitly so the composition can be
+    tested without connecting to Meta or Google Calendar.
 
-    Booking is enabled only when a CalendarService is available.
+    Booking is removed from the runtime when Calendar is unavailable,
+    while the remaining client capabilities continue working.
     """
 
+    instance = build_client_instance(
+        config.client_id,
+    )
+
     capability_factories: dict[str, object] = {}
-    enabled_capabilities = ["greeting"]
 
     if calendar_service is not None:
-        booking_repository = InMemoryBookingRepository()
+        booking_configuration = (
+            build_booking_configuration(
+                instance
+            )
+        )
+
+        booking_repository = (
+            InMemoryBookingRepository()
+        )
 
         booking_service = BookingService(
             repository=booking_repository,
             calendar_service=calendar_service,
         )
 
-        capability_factories["booking"] = lambda: BookingCapability(
-            booking_service=booking_service,
+        capability_factories["booking"] = (
+            lambda: BookingCapability(
+                booking_service=booking_service,
+                business_hours=(
+                    booking_configuration.business_hours
+                ),
+                booking_rules=(
+                    booking_configuration.booking_rules
+                ),
+            )
         )
-
-        enabled_capabilities.append("booking")
+    else:
+        instance = replace(
+            instance,
+            capabilities=[
+                capability_name
+                for capability_name in instance.capabilities
+                if capability_name != "booking"
+            ],
+        )
 
     bootstrap = Bootstrap(
         capability_factories=capability_factories,
     )
 
-    instance = Instance(
-        id="flowforge-whatsapp",
-        name="FlowForge WhatsApp",
-        default_language="es",
-        channels=["whatsapp"],
-        capabilities=enabled_capabilities,
+    application = bootstrap.build_from_instance(
+        instance,
     )
-
-    application = bootstrap.build_from_instance(instance)
 
     graph_message_handler = build_whatsapp_message_handler(
         application=application,
@@ -83,11 +110,15 @@ def create_app(
         app_secret=config.whatsapp.app_secret,
     )
 
-    return build_whatsapp_api(
+    app = build_whatsapp_api(
         message_handler=graph_message_handler,
         verify_token=config.whatsapp.verify_token,
         signature_verifier=signature_verifier,
     )
+
+    app.state.flowforge_instance = instance
+
+    return app
 
 
 def create_production_app(
@@ -99,11 +130,13 @@ def create_production_app(
 
     The WhatsApp integration remains available when Google Calendar
     credentials have not yet been configured. In that situation,
-    booking is temporarily disabled.
+    booking is temporarily disabled for the configured client.
     """
 
     try:
-        calendar_service: CalendarService | None = build_calendar_service()
+        calendar_service: CalendarService | None = (
+            build_calendar_service()
+        )
     except FileNotFoundError as error:
         logger.warning(
             "Google Calendar credentials are unavailable. "
@@ -131,13 +164,21 @@ def main() -> None:
 
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        format=(
+            "%(asctime)s %(levelname)s "
+            "%(name)s: %(message)s"
+        ),
     )
 
     config = FlowForgeConfig.load()
 
     app = create_production_app(
         config=config,
+    )
+
+    logger.info(
+        "Starting FlowForge client: %s",
+        config.client_id,
     )
 
     uvicorn.run(

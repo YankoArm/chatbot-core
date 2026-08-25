@@ -112,3 +112,40 @@ def test_create_app_verifies_whatsapp_webhook() -> None:
 
     assert response.status_code == 200
     assert response.text == "123456"
+
+def test_create_app_uses_configured_client_instance() -> None:
+    config = FlowForgeConfig(
+        whatsapp=WhatsAppConfig(
+            access_token="test-access-token",
+            phone_number_id="test-phone-number-id",
+            verify_token="test-verify-token",
+            app_secret="test-app-secret",
+        ),
+        server=ServerConfig(
+            host="127.0.0.1",
+            port=8000,
+        ),
+        client_id="hairdressing_demo",
+    )
+
+    app = create_app(
+        config=config,
+        calendar_service=FakeCalendarService(),
+        graph_client=FakeWhatsAppGraphClient(),
+    )
+
+    assert app.state.flowforge_instance.id == (
+        "hairdressing_demo"
+    )
+    assert app.state.flowforge_instance.name == (
+        "Salón Estilo"
+    )
+    assert app.state.flowforge_instance.template_id == (
+        "hairdressing"
+    )
+    assert app.state.flowforge_instance.capabilities == [
+        "greeting",
+        "faq",
+        "booking",
+        "human_transfer",
+    ]

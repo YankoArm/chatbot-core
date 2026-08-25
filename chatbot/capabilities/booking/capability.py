@@ -324,18 +324,27 @@ class BookingCapability(BaseCapability):
     ) -> bool:
         text = self._normalize_text(message)
 
-        return any(
-            keyword in text
-            for language_keywords in _BOOKING_KEYWORDS.values()
-            for keyword in language_keywords
+        return (
+            self._asks_for_available_dates(message)
+            or any(
+                keyword in text
+                for language_keywords in _BOOKING_KEYWORDS.values()
+                for keyword in language_keywords
+            )
         )
-
     def handle(
         self,
         context: Any,
         message: str,
     ) -> Response:
         if context.booking is None:
+            if self._asks_for_available_dates(
+                message
+            ):
+                return self._handle_initial_availability(
+                    context
+                )
+
             return self._start_booking(context)
 
         handler = self._get_step_handler(
@@ -353,6 +362,31 @@ class BookingCapability(BaseCapability):
             ),
         )
 
+    def _handle_initial_availability(
+        self,
+        context: Any,
+    ) -> Response:
+        available_dates = self._get_available_dates()
+
+        if not available_dates:
+            return self._response(
+                context=context,
+                text=self._text(
+                    context,
+                    "no_available_dates",
+                ),
+            )
+
+        return self._response(
+            context=context,
+            text=self._text(
+                context,
+                "available_dates",
+                dates=", ".join(
+                    available_dates
+                ),
+            ),
+        )
     def _start_booking(
         self,
         context: Any,

@@ -126,3 +126,68 @@ def test_reject_server_port_out_of_range(
         match="FLOWFORGE_PORT must be between 1 and 65535",
     ):
         FlowForgeConfig.load()
+
+def test_load_default_client_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "WHATSAPP_ACCESS_TOKEN",
+        "token",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_PHONE_NUMBER_ID",
+        "phone",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_VERIFY_TOKEN",
+        "verify",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_APP_SECRET",
+        "secret",
+    )
+    monkeypatch.setenv(
+        "FLOWFORGE_PORT",
+        "8000",
+    )
+    monkeypatch.delenv(
+        "FLOWFORGE_CLIENT_ID",
+        raising=False,
+    )
+
+    config = FlowForgeConfig.load()
+
+    assert config.client_id == "tarot_alvin"
+
+
+def test_load_client_id_from_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "WHATSAPP_ACCESS_TOKEN",
+        "token",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_PHONE_NUMBER_ID",
+        "phone",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_VERIFY_TOKEN",
+        "verify",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_APP_SECRET",
+        "secret",
+    )
+    monkeypatch.setenv(
+        "FLOWFORGE_PORT",
+        "8000",
+    )
+    monkeypatch.setenv(
+        "FLOWFORGE_CLIENT_ID",
+        "hairdressing_demo",
+    )
+
+    config = FlowForgeConfig.load()
+
+    assert config.client_id == "hairdressing_demo"

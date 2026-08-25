@@ -65,14 +65,15 @@ class GreetingCapability(BaseCapability):
             for greeting in language_greetings
         }
 
-        return any(
-            normalized_message == greeting
-            or normalized_message.startswith(
-                f"{greeting} "
-            )
-            for greeting in greetings
-        )
+        greeting_only_messages = greetings | {
+            "hola chatbot",
+            "hello there",
+        }
 
+        return (
+            normalized_message
+            in greeting_only_messages
+        )
     def handle(
         self,
         context: Any,

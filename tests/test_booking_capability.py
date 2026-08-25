@@ -731,3 +731,53 @@ def test_booking_capability_rejects_unavailable_date() -> None:
         "Lo siento, esa fecha no está disponible"
         in response.text
     )
+
+def test_booking_capability_can_handle_initial_availability_question() -> None:
+    capability = build_booking_capability()
+    context = ConversationContext(
+        session_id="initial-availability-intent",
+    )
+
+    assert capability.can_handle(
+        context,
+        "¿Qué fechas tenéis disponibles?",
+    ) is True
+
+
+def test_booking_capability_answers_initial_availability_question() -> None:
+    available_dates = (
+        date.today() + timedelta(days=10),
+        date.today() + timedelta(days=11),
+    )
+
+    capability = build_booking_capability(
+        available_dates=available_dates,
+    )
+
+    context = ConversationContext(
+        session_id="initial-availability-response",
+    )
+
+    response = capability.handle(
+        context=context,
+        message="¿Qué fechas tenéis disponibles?",
+    )
+
+    first_date = available_dates[0].strftime(
+        "%d/%m/%Y",
+    )
+    second_date = available_dates[1].strftime(
+        "%d/%m/%Y",
+    )
+
+    assert context.booking is None
+    assert first_date in response.text
+    assert second_date in response.text
+    assert "¿Qué día prefieres?" in response.text
+
+    assert response.metadata == {
+        "capability": "booking",
+        "handled": True,
+        "booking_step": "inactive",
+        "language": "es",
+    }

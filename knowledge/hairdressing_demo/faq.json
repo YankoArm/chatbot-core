@@ -1,0 +1,23 @@
+{
+  "services_and_prices": {
+    "keywords": [
+      "servicios y precios",
+      "servicios",
+      "precios",
+      "precio",
+      "tarifas",
+      "cuanto cuesta",
+      "cuanto vale",
+      "que servicios teneis",
+      "que ofreceis",
+      "services",
+      "prices",
+      "price list",
+      "how much"
+    ],
+    "answers": {
+      "es": "Estos son nuestros servicios:\n\n✂️ Corte de mujer — 25 €\n✂️ Corte de hombre — 18 €\n🧒 Corte infantil — 15 €\n💇 Peinado — 25 €\n🎨 Tinte — desde 45 €\n✨ Mechas — desde 65 €\n🌿 Tratamiento capilar — 30 €\n\nLos precios son orientativos y pueden variar según el largo y las características del cabello.",
+      "en": "These are our services:\n\n✂️ Women's haircut — €25\n✂️ Men's haircut — €18\n🧒 Children's haircut — €15\n💇 Hairstyling — €25\n🎨 Hair colouring — from €45\n✨ Highlights — from €65\n🌿 Hair treatment — €30\n\nPrices are indicative and may vary depending on hair length and characteristics."
+    }
+  }
+}

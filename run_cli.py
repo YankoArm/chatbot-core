@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import argparse
+from collections.abc import Sequence
+
 from chatbot.application import Bootstrap
 from chatbot.booking import (
     BookingService,
     InMemoryBookingRepository,
     build_booking_configuration,
-)
-from chatbot.business_templates.tarot import (
-    create_tarot_template,
 )
 from chatbot.capabilities.booking import (
     BookingCapability,
@@ -16,26 +16,53 @@ from chatbot.channels import (
     ApplicationChannel,
     CLIChannel,
 )
-from chatbot.clients.tarot_alvin import (
-    create_tarot_alvin_definition,
+from chatbot.clients.registry import (
+    build_client_instance,
+    list_client_ids,
 )
-from chatbot.instances import InstanceResolver
 from run_google_calendar import (
     build_calendar_service,
 )
 
 
-def main() -> None:
+def build_argument_parser() -> argparse.ArgumentParser:
     """
-    Run Tarot Alvin through the interactive CLI channel.
+    Build the FlowForge CLI argument parser.
     """
 
-    template = create_tarot_template()
-    definition = create_tarot_alvin_definition()
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run a registered FlowForge client "
+            "through the interactive CLI."
+        ),
+    )
 
-    instance = InstanceResolver().resolve(
-        template=template,
-        definition=definition,
+    parser.add_argument(
+        "--client",
+        choices=list_client_ids(),
+        default="tarot_alvin",
+        help=(
+            "Registered client to run. "
+            "Defaults to tarot_alvin."
+        ),
+    )
+
+    return parser
+
+
+def main(
+    argv: Sequence[str] | None = None,
+) -> None:
+    """
+    Run a registered FlowForge client through the CLI channel.
+    """
+
+    arguments = build_argument_parser().parse_args(
+        argv
+    )
+
+    instance = build_client_instance(
+        arguments.client,
     )
 
     booking_configuration = (
@@ -82,8 +109,9 @@ def main() -> None:
     )
 
     print("=" * 50)
-    print(" FlowForge CLI - Tarot Alvin")
+    print(f" FlowForge CLI - {instance.name}")
     print("=" * 50)
+    print(f"Client: {instance.id}")
     print(
         "Google Calendar integration enabled."
     )
