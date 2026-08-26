@@ -42,6 +42,7 @@ class BookingState:
     time: str | None = None
 
     available_times: tuple[str, ...] = ()
+    available_times_page: int = 0
     available_dates: tuple[str, ...] = ()
 
     confirmed: bool = False
@@ -143,6 +144,7 @@ class BookingState:
         self.time = None
 
         self.available_times = ()
+        self.available_times_page = 0
         self.available_dates = ()
 
         self.confirmed = False

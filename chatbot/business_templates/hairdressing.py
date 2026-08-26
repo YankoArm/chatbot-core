@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from chatbot.activation import ActivationConfig
 from chatbot.instances import TemplateDefinition
@@ -30,6 +30,7 @@ def create_hairdressing_template() -> TemplateDefinition:
             "greeting",
             "faq",
             "booking",
+            "help",
             "human_transfer",
         ],
         connectors=[],
@@ -40,6 +41,9 @@ def create_hairdressing_template() -> TemplateDefinition:
                 "requires_confirmation": True,
             },
             "faq": {
+                "enabled": True,
+            },
+            "help": {
                 "enabled": True,
             },
             "human_transfer": {

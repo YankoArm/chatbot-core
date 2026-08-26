@@ -67,6 +67,7 @@ class HumanTransferCapability(BaseCapability):
     name = "human_transfer"
     version = "1.0"
     dependencies: list[str] = []
+    interrupts_active_flow = True
 
     def can_handle(
         self,

@@ -97,9 +97,21 @@ class FAQCapability(BaseCapability):
             for keyword in language_keywords
         }
 
-        return any(
+        if any(
             keyword in normalized_message
             for keyword in keywords
+        ):
+            return True
+
+        language = self._get_language(context)
+
+        return (
+            self._find_answer(
+                context=context,
+                message=message,
+                language=language,
+            )
+            is not None
         )
 
     def handle(
@@ -132,24 +144,10 @@ class FAQCapability(BaseCapability):
         language: Language,
     ) -> str | None:
         """
-        Find the most suitable FAQ answer from the configured
-        KnowledgeService.
+        Find the most suitable configured FAQ answer.
 
-        The conversation context is expected to expose:
-
-            context.knowledge_service
-
-        FAQ section structure:
-
-            {
-                "prices": {
-                    "keywords": ["precio", "cuanto cuesta"],
-                    "answers": {
-                        "es": "Las sesiones cuestan 40 €.",
-                        "en": "Sessions cost €40."
-                    }
-                }
-            }
+        The last matched FAQ entry is remembered so short follow-up
+        questions can preserve their conversational subject.
         """
 
         knowledge_service = getattr(
@@ -173,7 +171,56 @@ class FAQCapability(BaseCapability):
             message
         )
 
-        for entry in faq_entries.values():
+        follow_up_messages = {
+            "y cuanto cuesta",
+            "cuanto cuesta",
+            "y cuanto vale",
+            "cuanto vale",
+            "y cuanto dura",
+            "cuanto dura",
+            "and how much is it",
+            "how much is it",
+            "and how much does it cost",
+            "how much does it cost",
+            "and how long does it take",
+            "how long does it take",
+        }
+
+        get_variable = getattr(
+            context,
+            "get_variable",
+            None,
+        )
+
+        if (
+            normalized_message in follow_up_messages
+            and callable(get_variable)
+        ):
+            previous_entry_id = get_variable(
+                "last_faq_entry_id"
+            )
+            previous_entry = faq_entries.get(
+                previous_entry_id
+            )
+
+            if isinstance(previous_entry, dict):
+                previous_answers = previous_entry.get(
+                    "answers",
+                    {},
+                )
+
+                if isinstance(previous_answers, dict):
+                    previous_answer = previous_answers.get(
+                        language.value
+                    )
+
+                    if (
+                        isinstance(previous_answer, str)
+                        and previous_answer.strip()
+                    ):
+                        return previous_answer
+
+        for entry_id, entry in faq_entries.items():
             if not isinstance(entry, dict):
                 continue
 
@@ -181,7 +228,6 @@ class FAQCapability(BaseCapability):
                 "keywords",
                 [],
             )
-
             answers = entry.get(
                 "answers",
                 {},
@@ -213,6 +259,18 @@ class FAQCapability(BaseCapability):
             )
 
             if isinstance(answer, str) and answer.strip():
+                set_variable = getattr(
+                    context,
+                    "set_variable",
+                    None,
+                )
+
+                if callable(set_variable):
+                    set_variable(
+                        "last_faq_entry_id",
+                        entry_id,
+                    )
+
                 return answer
 
         return None

@@ -73,6 +73,16 @@ class ConversationOrchestrator:
                 response_key="empty_message",
             )
 
+        interruption_response = (
+            self._delegate_interrupting_message(
+                context=context,
+                message=normalized_message,
+            )
+        )
+
+        if interruption_response is not None:
+            return interruption_response
+
         active_response = self._continue_active_flow(
             context=context,
             message=normalized_message,
@@ -122,6 +132,43 @@ class ConversationOrchestrator:
             return
 
         context.set_language(self.default_language)
+
+    def _delegate_interrupting_message(
+        self,
+        context: ConversationContext,
+        message: str,
+    ) -> Response | None:
+        """
+        Allow explicitly interrupting capabilities to take control of
+        an unfinished conversational flow.
+        """
+
+        if not self._has_active_incomplete_flow(
+            context
+        ):
+            return None
+
+        for capability in self.capability_manager.all():
+            if not capability.interrupts_active_flow:
+                continue
+
+            if not capability.can_handle(
+                context,
+                message,
+            ):
+                continue
+
+            if not capability.preserves_active_flow:
+                context.set_active_capability(
+                    capability.name
+                )
+
+            return capability.handle(
+                context,
+                message,
+            )
+
+        return None
 
     def _continue_active_flow(
         self,

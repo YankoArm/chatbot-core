@@ -14,6 +14,160 @@
       "en": "Highlights start from €65 and usually take approximately 2 hours. The final price may vary depending on hair length and characteristics."
     }
   },
+  "opening_hours": {
+    "keywords": [
+      "que horario teneis",
+      "cual es vuestro horario",
+      "cuando abris",
+      "horario",
+      "horarios",
+      "opening hours",
+      "what are your opening hours",
+      "when are you open"
+    ],
+    "answers": {
+      "es": "Abrimos de lunes a viernes de 09:30 a 13:30 y de 16:00 a 20:00. Los sábados abrimos de 09:30 a 14:00 y los domingos permanecemos cerrados.",
+      "en": "We are open Monday to Friday from 09:30 to 13:30 and from 16:00 to 20:00. On Saturdays we are open from 09:30 to 14:00, and we are closed on Sundays."
+    }
+  },
+  "location": {
+    "keywords": [
+      "donde estais",
+      "cual es vuestra direccion",
+      "direccion",
+      "ubicacion",
+      "como llegar",
+      "what is your address",
+      "where are you",
+      "location",
+      "how do i get there"
+    ],
+    "answers": {
+      "es": "Estamos en Calle de Velázquez, 80, 28001 Madrid. Puedes pedirnos indicaciones si necesitas ayuda para llegar.",
+      "en": "We are located at Calle de Velázquez, 80, 28001 Madrid. Ask us for directions if you need help getting here."
+    }
+  },
+  "payment_methods": {
+    "keywords": [
+      "puedo pagar con tarjeta",
+      "aceptais tarjeta",
+      "formas de pago",
+      "metodos de pago",
+      "pagar con bizum",
+      "pagar en efectivo",
+      "what payment methods do you accept",
+      "can i pay by card",
+      "payment methods",
+      "pay by cash",
+      "pay with bizum"
+    ],
+    "answers": {
+      "es": "Puedes pagar con tarjeta, efectivo o Bizum al finalizar el servicio.",
+      "en": "You can pay by card, cash or Bizum after your service."
+    }
+  },
+  "cancellation_policy": {
+    "keywords": [
+      "politica de cancelacion",
+      "cancelar una cita",
+      "cambiar una cita",
+      "anular una cita",
+      "con cuanto tiempo puedo cancelar",
+      "what is your cancellation policy",
+      "cancel an appointment",
+      "reschedule an appointment",
+      "change an appointment"
+    ],
+    "answers": {
+      "es": "Puedes cambiar o cancelar tu cita sin coste avisando con al menos 24 horas de antelación. Si necesitas hacerlo, escríbenos directamente.",
+      "en": "You can reschedule or cancel your appointment free of charge with at least 24 hours' notice. If you need to do so, message us directly."
+    }
+  },
+  "hair_coloring_details": {
+    "keywords": [
+      "tinte",
+      "precio del tinte",
+      "cuanto cuesta el tinte",
+      "cuanto vale el tinte",
+      "hair colouring",
+      "hair coloring",
+      "hair colour price",
+      "hair color price"
+    ],
+    "answers": {
+      "es": "El tinte cuesta desde 45 € y suele durar aproximadamente 90 minutos. El precio final puede variar según el largo y las características del cabello.",
+      "en": "Hair colouring starts from €45 and usually takes approximately 90 minutes. The final price may vary depending on hair length and characteristics."
+    }
+  },
+  "womens_haircut_details": {
+    "keywords": [
+      "corte de mujer",
+      "precio del corte de mujer",
+      "cuanto cuesta el corte de mujer",
+      "women's haircut",
+      "womens haircut",
+      "women haircut price"
+    ],
+    "answers": {
+      "es": "El corte de mujer cuesta 25 € y dura aproximadamente 45 minutos.",
+      "en": "A women's haircut costs €25 and takes approximately 45 minutes."
+    }
+  },
+  "mens_haircut_details": {
+    "keywords": [
+      "corte de hombre",
+      "precio del corte de hombre",
+      "cuanto cuesta el corte de hombre",
+      "men's haircut",
+      "mens haircut",
+      "men haircut price"
+    ],
+    "answers": {
+      "es": "El corte de hombre cuesta 18 € y dura aproximadamente 30 minutos.",
+      "en": "A men's haircut costs €18 and takes approximately 30 minutes."
+    }
+  },
+  "childrens_haircut_details": {
+    "keywords": [
+      "corte infantil",
+      "precio del corte infantil",
+      "cuanto cuesta el corte infantil",
+      "children's haircut",
+      "childrens haircut",
+      "child haircut price"
+    ],
+    "answers": {
+      "es": "El corte infantil cuesta 15 € y dura aproximadamente 30 minutos.",
+      "en": "A children's haircut costs €15 and takes approximately 30 minutes."
+    }
+  },
+  "hairstyling_details": {
+    "keywords": [
+      "peinado",
+      "precio del peinado",
+      "cuanto cuesta el peinado",
+      "hairstyling",
+      "hairstyling price",
+      "hair styling"
+    ],
+    "answers": {
+      "es": "El peinado cuesta 25 € y dura aproximadamente 45 minutos.",
+      "en": "Hairstyling costs €25 and takes approximately 45 minutes."
+    }
+  },
+  "hair_treatment_details": {
+    "keywords": [
+      "tratamiento capilar",
+      "precio del tratamiento capilar",
+      "cuanto cuesta el tratamiento capilar",
+      "hair treatment",
+      "hair treatment price"
+    ],
+    "answers": {
+      "es": "El tratamiento capilar cuesta 30 € y dura aproximadamente 45 minutos.",
+      "en": "A hair treatment costs €30 and takes approximately 45 minutes."
+    }
+  },
   "services_and_prices": {
     "keywords": [
       "servicios y precios",

@@ -1,4 +1,4 @@
-﻿from chatbot.business_templates import (
+from chatbot.business_templates import (
     create_hairdressing_template,
 )
 
@@ -24,6 +24,7 @@ def test_create_hairdressing_template():
         "greeting",
         "faq",
         "booking",
+        "help",
         "human_transfer",
     ]
 
@@ -36,6 +37,9 @@ def test_create_hairdressing_template():
             "requires_confirmation": True,
         },
         "faq": {
+            "enabled": True,
+        },
+        "help": {
             "enabled": True,
         },
         "human_transfer": {

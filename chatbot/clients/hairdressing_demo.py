@@ -166,7 +166,12 @@ def create_hairdressing_demo_definition() -> InstanceDefinition:
             ),
             activated_message=(
                 "Demostración de peluquería activada correctamente.\n\n"
-                "¿En qué puedo ayudarte?"
+                "Puedo ayudarte con:\n"
+                "• Reservar una cita\n"
+                "• Consultar servicios y precios\n"
+                "• Ver horarios y ubicación\n"
+                "• Hablar con una persona\n\n"
+                "Escríbeme directamente qué necesitas."
             ),
             prompt_cooldown=60,
             session_timeout=3600,

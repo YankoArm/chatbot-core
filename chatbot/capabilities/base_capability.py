@@ -13,6 +13,8 @@ class BaseCapability(ABC):
     name: str
     version: str = "1.0"
     dependencies: list[str] = []
+    interrupts_active_flow: bool = False
+    preserves_active_flow: bool = False
 
     def register(self, context: dict[str, Any]) -> None:
         """

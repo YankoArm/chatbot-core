@@ -147,5 +147,6 @@ def test_create_app_uses_configured_client_instance() -> None:
         "greeting",
         "faq",
         "booking",
+        "help",
         "human_transfer",
     ]

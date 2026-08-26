@@ -1077,3 +1077,114 @@ def test_service_duration_is_used_when_confirming_booking() -> None:
         booking_rules.appointment_duration
         == timedelta(minutes=60)
     )
+
+
+def test_booking_can_be_cancelled_from_any_step() -> None:
+    capability = BookingCapability()
+
+    context = ConversationContext(
+        session_id="cancel-booking-from-name-step",
+    )
+    context.booking = BookingState()
+    context.set_active_capability(
+        "booking",
+    )
+
+    response = capability.handle(
+        context=context,
+        message="cancelar",
+    )
+
+    assert context.booking is None
+    assert context.active_capability is None
+    assert response.text == (
+        "La solicitud de reserva ha sido cancelada. "
+        "Puedes empezar otra cuando quieras."
+    )
+    assert response.metadata["booking_step"] == "cancelled"
+
+def test_booking_capability_paginates_available_times() -> None:
+    from datetime import datetime
+    from chatbot.availability import TimeSlot
+    from zoneinfo import ZoneInfo
+
+    booking_service = FakeBookingService()
+
+    target_date = (
+        date.today()
+        + timedelta(days=10)
+    )
+    date_value = target_date.strftime(
+        "%d/%m/%Y"
+    )
+
+    starts = [
+        datetime(
+            target_date.year,
+            target_date.month,
+            target_date.day,
+            9 + (index // 2),
+            30 if index % 2 else 0,
+            tzinfo=ZoneInfo(
+                "Europe/Madrid"
+            ),
+        )
+        for index in range(12)
+    ]
+
+    booking_service.available_slots = tuple(
+        TimeSlot(
+            start=start,
+            end=start + timedelta(minutes=30),
+            occupied_start=start,
+            occupied_end=start + timedelta(minutes=30),
+        )
+        for start in starts
+    )
+
+    business_hours = BusinessHours.standard_week(
+        start=time(9, 0),
+        end=time(18, 0),
+        timezone_name="Europe/Madrid",
+    )
+
+    capability = BookingCapability(
+        booking_service=booking_service,
+        business_hours=business_hours,
+        booking_rules=BookingRules.hourly(),
+    )
+
+    context = ConversationContext(
+        session_id="available-times-pagination",
+    )
+    context.booking = BookingState(
+        name="Yanko",
+        phone="+34600123123",
+        available_dates=(
+            date_value,
+        ),
+    )
+    context.set_active_capability(
+        "booking",
+    )
+
+    first_response = capability.handle(
+        context=context,
+        message=date_value,
+    )
+
+    assert len(context.booking.available_times) == 12
+    assert "09:00" in first_response.text
+    assert "12:30" in first_response.text
+    assert "13:00" not in first_response.text
+    assert "más horas" in first_response.text
+
+    second_response = capability.handle(
+        context=context,
+        message="más horas",
+    )
+
+    assert "09:00" not in second_response.text
+    assert "13:00" in second_response.text
+    assert "14:30" in second_response.text
+    assert context.booking.next_step is BookingStep.TIME

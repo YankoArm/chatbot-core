@@ -42,6 +42,9 @@ def test_detects_spanish(
         "I need information about your services",
         "Thanks for your help",
         "What are your opening hours?",
+        "What is your address?",
+        "What payment methods do you accept?",
+        "What is your cancellation policy?",
     ],
 )
 def test_detects_english(

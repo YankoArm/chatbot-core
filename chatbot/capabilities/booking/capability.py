@@ -361,6 +361,20 @@ class BookingCapability(BaseCapability):
                 message,
             )
 
+        language = self._get_language(context)
+        normalized_message = self._normalize_text(
+            message
+        )
+        early_cancellation_words = (
+            _CANCELLATION_WORDS[language]
+            - {"no"}
+        )
+
+        if normalized_message in early_cancellation_words:
+            return self._cancel_booking(
+                context
+            )
+
         handler = self._get_step_handler(
             context.booking.next_step
         )
@@ -374,6 +388,28 @@ class BookingCapability(BaseCapability):
                 context,
                 "already_confirmed",
             ),
+        )
+
+    def _cancel_booking(
+        self,
+        context: Any,
+    ) -> Response:
+        language = self._get_language(context)
+
+        context.booking = None
+        context.clear_active_capability()
+
+        return Response(
+            text=self._text(
+                context,
+                "cancelled",
+            ),
+            metadata={
+                "capability": self.name,
+                "handled": True,
+                "booking_step": "cancelled",
+                "language": language.value,
+            },
         )
 
     def _handle_initial_availability(
@@ -743,15 +779,69 @@ class BookingCapability(BaseCapability):
             )
 
         context.booking.available_times = available_times
+        context.booking.available_times_page = 0
 
         return self._response(
             context=context,
-            text=self._text(
-                context,
-                "available_times",
-                times=", ".join(available_times),
+            text=self._build_available_times_page(
+                context
             ),
         )
+
+    def _build_available_times_page(
+        self,
+        context: Any,
+        *,
+        advance: bool = False,
+    ) -> str:
+        booking = context.booking
+
+        if booking is None:
+            raise ValueError(
+                "Cannot paginate times without a booking state."
+            )
+
+        page_size = 8
+        total_times = len(
+            booking.available_times
+        )
+        last_page = max(
+            0,
+            (total_times - 1) // page_size,
+        )
+
+        if advance:
+            booking.available_times_page = min(
+                booking.available_times_page + 1,
+                last_page,
+            )
+
+        page_start = (
+            booking.available_times_page
+            * page_size
+        )
+        page_end = page_start + page_size
+        page_times = booking.available_times[
+            page_start:page_end
+        ]
+
+        message = self._text(
+            context,
+            "available_times",
+            times=", ".join(page_times),
+        )
+
+        if page_end < total_times:
+            if self._get_language(context) is Language.EN:
+                message += (
+                    " Write “more times” to see the next options."
+                )
+            else:
+                message += (
+                    " Escribe «más horas» para ver las siguientes."
+                )
+
+        return message
 
     def _handle_time(
         self,
@@ -759,6 +849,23 @@ class BookingCapability(BaseCapability):
         message: str,
     ) -> Response:
         time = message.strip()
+        normalized_message = self._normalize_text(
+            message
+        )
+
+        if normalized_message in {
+            "mas horas",
+            "siguientes horas",
+            "more times",
+            "next times",
+        }:
+            return self._response(
+                context=context,
+                text=self._build_available_times_page(
+                    context,
+                    advance=True,
+                ),
+            )
 
         if not self._is_valid_time(time):
             return self._response(
