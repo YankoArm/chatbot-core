@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -8,7 +9,10 @@ from chatbot.availability import (
     BusinessHours,
     TimeSlot,
 )
-from chatbot.booking.models import Booking
+from chatbot.booking.models import (
+    Booking,
+    BookingStatus,
+)
 from chatbot.booking.repository import BookingRepository
 from chatbot.booking.state import BookingState
 from chatbot.calendar import CalendarService
@@ -17,6 +21,12 @@ from chatbot.calendar import CalendarService
 class BookingSlotUnavailableError(Exception):
     """
     Raised when the selected booking slot is no longer available.
+    """
+
+
+class BookingAlreadyCancelledError(Exception):
+    """
+    Raised when an already cancelled booking is cancelled again.
     """
 
 
@@ -47,6 +57,63 @@ class BookingService:
         self._repository.save(
             booking
         )
+
+    def find_active_bookings_by_phone(
+        self,
+        phone: str,
+    ) -> tuple[Booking, ...]:
+        """
+        Return confirmed bookings associated with a phone number.
+
+        Cancelled bookings remain persisted for historical purposes but
+        are excluded from operations on active appointments.
+        """
+
+        bookings = self._repository.find_by_phone(
+            phone
+        )
+
+        return tuple(
+            booking
+            for booking in bookings
+            if booking.status is BookingStatus.CONFIRMED
+        )
+
+    def cancel_booking(
+        self,
+        booking: Booking,
+    ) -> Booking:
+        """
+        Cancel a confirmed booking and persist its new status.
+
+        The external Calendar event is cancelled before updating local
+        persistence so a failed Calendar operation does not leave the
+        local record incorrectly marked as cancelled.
+        """
+
+        if booking.status is BookingStatus.CANCELLED:
+            raise BookingAlreadyCancelledError(
+                "The booking has already been cancelled."
+            )
+
+        if (
+            self._calendar_service is not None
+            and booking.calendar_booking_id is not None
+        ):
+            self._calendar_service.cancel_booking(
+                booking.calendar_booking_id
+            )
+
+        cancelled_booking = replace(
+            booking,
+            status=BookingStatus.CANCELLED,
+        )
+
+        self._repository.update(
+            cancelled_booking
+        )
+
+        return cancelled_booking
 
     def create_booking_from_state(
         self,
@@ -115,6 +182,11 @@ class BookingService:
             self._create_calendar_booking(
                 booking
             )
+        )
+
+        booking = replace(
+            booking,
+            calendar_booking_id=calendar_booking_id,
         )
 
         self.create_booking(

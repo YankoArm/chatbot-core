@@ -9,10 +9,14 @@ from chatbot.availability import (
     BusinessHours,
     TimeSlot,
 )
-from chatbot.booking.models import Booking
+from chatbot.booking.models import (
+    Booking,
+    BookingStatus,
+)
 from chatbot.booking.repository import BookingRepository
 from chatbot.booking.service import (
     BookingService,
+    BookingAlreadyCancelledError,
     BookingSlotUnavailableError,
 )
 from chatbot.booking.state import BookingState
@@ -29,12 +33,34 @@ class FakeBookingRepository(BookingRepository):
 
     def __init__(self) -> None:
         self.saved_booking: Booking | None = None
+        self.updated_booking: Booking | None = None
 
     def save(
         self,
         booking: Booking,
     ) -> None:
         self.saved_booking = booking
+
+
+    def update(
+        self,
+        booking: Booking,
+    ) -> None:
+        self.updated_booking = booking
+
+    def find_by_phone(
+        self,
+        phone: str,
+    ) -> tuple[Booking, ...]:
+        if (
+            self.saved_booking is not None
+            and self.saved_booking.phone == phone
+        ):
+            return (
+                self.saved_booking,
+            )
+
+        return ()
 
 
 def make_complete_state() -> BookingState:
@@ -650,3 +676,175 @@ def test_booking_service_creates_service_aware_calendar_event() -> None:
         "Mechas"
     )
     assert bookings[0]["metadata"]["duration_minutes"] == 120
+
+def test_booking_service_persists_calendar_booking_id() -> None:
+    repository = FakeBookingRepository()
+    calendar_service = Mock(
+        spec=CalendarService
+    )
+
+    calendar_service.create_booking.return_value = (
+        "calendar-event-123"
+    )
+
+    service = BookingService(
+        repository=repository,
+        calendar_service=calendar_service,
+    )
+
+    booking = service.create_booking_from_state(
+        BookingState(
+            name="Yanko",
+            phone="+34600123123",
+            date="30/08/2026",
+            time="16:30",
+        )
+    )
+
+    assert booking.calendar_booking_id == (
+        "calendar-event-123"
+    )
+    assert repository.saved_booking == booking
+    assert (
+        repository.saved_booking.calendar_booking_id
+        == "calendar-event-123"
+    )
+
+def test_booking_service_cancels_calendar_event_and_updates_booking() -> None:
+    repository = Mock(
+        spec=BookingRepository
+    )
+    calendar_service = Mock(
+        spec=CalendarService
+    )
+
+    service = BookingService(
+        repository=repository,
+        calendar_service=calendar_service,
+    )
+
+    booking = Booking(
+        name="Yanko",
+        phone="+34600123123",
+        date="30/08/2026",
+        time="16:30",
+        service_id="highlights",
+        service_name="Mechas",
+        duration_minutes=120,
+        calendar_booking_id="calendar-event-123",
+    )
+
+    cancelled_booking = service.cancel_booking(
+        booking
+    )
+
+    calendar_service.cancel_booking.assert_called_once_with(
+        "calendar-event-123"
+    )
+    repository.update.assert_called_once_with(
+        cancelled_booking
+    )
+    assert cancelled_booking.status is BookingStatus.CANCELLED
+
+
+def test_booking_service_rejects_already_cancelled_booking() -> None:
+    repository = Mock(
+        spec=BookingRepository
+    )
+    calendar_service = Mock(
+        spec=CalendarService
+    )
+
+    service = BookingService(
+        repository=repository,
+        calendar_service=calendar_service,
+    )
+
+    booking = Booking(
+        name="Yanko",
+        phone="+34600123123",
+        date="30/08/2026",
+        time="16:30",
+        calendar_booking_id="calendar-event-123",
+        status=BookingStatus.CANCELLED,
+    )
+
+    with pytest.raises(
+        BookingAlreadyCancelledError,
+    ):
+        service.cancel_booking(
+            booking
+        )
+
+    calendar_service.cancel_booking.assert_not_called()
+    repository.update.assert_not_called()
+
+def test_booking_service_finds_only_active_bookings_by_phone(
+) -> None:
+    repository = Mock(
+        spec=BookingRepository
+    )
+
+    confirmed_booking = Booking(
+        name="Yanko",
+        phone="+34600123123",
+        date="30/08/2026",
+        time="16:30",
+        calendar_booking_id="confirmed-event",
+    )
+    cancelled_booking = Booking(
+        name="Yanko",
+        phone="+34600123123",
+        date="31/08/2026",
+        time="10:00",
+        calendar_booking_id="cancelled-event",
+        status=BookingStatus.CANCELLED,
+    )
+
+    repository.find_by_phone.return_value = (
+        confirmed_booking,
+        cancelled_booking,
+    )
+
+    service = BookingService(
+        repository=repository,
+    )
+
+    result = service.find_active_bookings_by_phone(
+        "+34600123123"
+    )
+
+    assert result == (
+        confirmed_booking,
+    )
+    repository.find_by_phone.assert_called_once_with(
+        "+34600123123"
+    )
+
+
+def test_booking_service_returns_empty_when_phone_has_no_active_bookings(
+) -> None:
+    repository = Mock(
+        spec=BookingRepository
+    )
+
+    repository.find_by_phone.return_value = (
+        Booking(
+            name="Yanko",
+            phone="+34600123123",
+            date="31/08/2026",
+            time="10:00",
+            calendar_booking_id="cancelled-event",
+            status=BookingStatus.CANCELLED,
+        ),
+    )
+
+    service = BookingService(
+        repository=repository,
+    )
+
+    result = service.find_active_bookings_by_phone(
+        "+34600123123"
+    )
+
+    assert result == ()

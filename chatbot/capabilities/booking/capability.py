@@ -22,6 +22,10 @@ from typing import Any, Callable
 
 from chatbot.booking.services import BookableService
 from chatbot.booking import (
+    BookingAlreadyCancelledError,
+    BookingManagementAction,
+    BookingManagementState,
+    BookingManagementStep,
     BookingService,
     BookingSlotUnavailableError,
     BookingState,
@@ -95,6 +99,137 @@ _CANCELLATION_WORDS = {
         "nevermind",
     },
 }
+
+_EXISTING_BOOKING_CANCELLATION_PHRASES = {
+    Language.ES: (
+        "cancelar mi cita",
+        "cancelar una cita",
+        "anular mi cita",
+        "anular una cita",
+        "cancelar mi reserva",
+        "anular mi reserva",
+    ),
+    Language.EN: (
+        "cancel my appointment",
+        "cancel an appointment",
+        "cancel my booking",
+        "cancel my reservation",
+    ),
+}
+
+_BOOKING_MANAGEMENT_CONFLICT_TEXTS = {
+    Language.ES: (
+        "Esa cita ya no está activa. Es posible que se haya "
+        "cancelado desde otro canal."
+    ),
+    Language.EN: (
+        "That appointment is no longer active. It may have "
+        "been cancelled through another channel."
+    ),
+}
+
+
+_BOOKING_MANAGEMENT_EXIT_TEXTS = {
+    Language.ES: (
+        "La gestión de tu cita ha finalizado "
+        "sin realizar cambios."
+    ),
+    Language.EN: (
+        "Appointment management has ended "
+        "without making any changes."
+    ),
+}
+
+
+_BOOKING_MANAGEMENT_TEXTS = {
+    Language.ES: {
+        "ask_phone": (
+            "Para localizar tu cita, indícame el número "
+            "de teléfono que usaste al reservar."
+        ),
+        "no_active_bookings": (
+            "No he encontrado ninguna cita activa asociada "
+            "a ese teléfono. Comprueba el número e inténtalo "
+            "de nuevo o escribe «cancelar» para salir."
+        ),
+        "multiple_bookings": (
+            "He encontrado varias citas activas:\n\n"
+            "{bookings}\n\n"
+            "Escribe el número de la cita que quieres cancelar."
+        ),
+        "invalid_selection": (
+            "Esa opción no es válida. Escribe un número "
+            "entre 1 y {count}."
+        ),
+        "cancellation_confirmation": (
+            "He encontrado esta cita:\n\n"
+            "{service_line}"
+            "Fecha: {date}\n"
+            "Hora: {time}\n\n"
+            "¿Quieres cancelarla? Responde «sí» para "
+            "confirmar o «no» para conservarla."
+        ),
+        "cancellation_complete": (
+            "Tu cita ha sido cancelada correctamente.\n\n"
+            "{service_line}"
+            "Fecha: {date}\n"
+            "Hora: {time}\n\n"
+            "Si necesitas otra cita, puedes reservarla "
+            "cuando quieras."
+        ),
+        "cancellation_rejected": (
+            "De acuerdo. Tu cita se mantiene sin cambios."
+        ),
+        "unknown_confirmation": (
+            "No he entendido la respuesta. Escribe «sí» "
+            "para cancelar la cita o «no» para conservarla."
+        ),
+    },
+    Language.EN: {
+        "ask_phone": (
+            "To find your appointment, please provide the "
+            "phone number you used when booking."
+        ),
+        "no_active_bookings": (
+            "I couldn't find any active appointments associated "
+            "with that phone number. Check the number and try "
+            "again, or write “cancel” to exit."
+        ),
+        "multiple_bookings": (
+            "I found several active appointments:\n\n"
+            "{bookings}\n\n"
+            "Enter the number of the appointment you want to cancel."
+        ),
+        "invalid_selection": (
+            "That option is not valid. Enter a number "
+            "between 1 and {count}."
+        ),
+        "cancellation_confirmation": (
+            "I found this appointment:\n\n"
+            "{service_line}"
+            "Date: {date}\n"
+            "Time: {time}\n\n"
+            "Would you like to cancel it? Reply “yes” to "
+            "confirm or “no” to keep it."
+        ),
+        "cancellation_complete": (
+            "Your appointment has been cancelled successfully.\n\n"
+            "{service_line}"
+            "Date: {date}\n"
+            "Time: {time}\n\n"
+            "If you need another appointment, you can book "
+            "one whenever you want."
+        ),
+        "cancellation_rejected": (
+            "Understood. Your appointment remains unchanged."
+        ),
+        "unknown_confirmation": (
+            "I didn't understand your response. Reply “yes” "
+            "to cancel the appointment or “no” to keep it."
+        ),
+    },
+}
+
 
 _TEXTS = {
     Language.ES: {
@@ -349,6 +484,21 @@ class BookingCapability(BaseCapability):
         message: str,
     ) -> Response:
         if context.booking is None:
+            if context.booking_management is not None:
+                return self._handle_booking_management(
+                    context,
+                    message,
+                )
+
+            if self._is_existing_booking_cancellation(
+                message
+            ):
+                return (
+                    self._start_existing_booking_cancellation(
+                        context
+                    )
+                )
+
             if self._asks_for_available_dates(
                 message
             ):
@@ -388,6 +538,577 @@ class BookingCapability(BaseCapability):
                 context,
                 "already_confirmed",
             ),
+        )
+
+    def _is_existing_booking_cancellation(
+        self,
+        message: str,
+    ) -> bool:
+        normalized_message = self._normalize_text(
+            message
+        )
+
+        return any(
+            phrase in normalized_message
+            for language_phrases
+            in _EXISTING_BOOKING_CANCELLATION_PHRASES.values()
+            for phrase in language_phrases
+        )
+
+    def _start_existing_booking_cancellation(
+        self,
+        context: Any,
+    ) -> Response:
+        language = self._get_language(context)
+
+        context.booking_management = (
+            BookingManagementState(
+                action=BookingManagementAction.CANCEL,
+            )
+        )
+
+        return Response(
+            text=(
+                _BOOKING_MANAGEMENT_TEXTS[
+                    language
+                ]["ask_phone"]
+            ),
+            metadata={
+                "capability": self.name,
+                "handled": True,
+                "booking_management_step": (
+                    BookingManagementStep.PHONE.value
+                ),
+                "language": language.value,
+            },
+        )
+
+    def _handle_booking_management(
+        self,
+        context: Any,
+        message: str,
+    ) -> Response:
+        """
+        Continue management of an existing booking.
+        """
+
+        management = context.booking_management
+
+        if management is None:
+            raise ValueError(
+                "Cannot handle missing booking management state."
+            )
+
+        language = self._get_language(context)
+        normalized_message = self._normalize_text(
+            message
+        )
+        exit_words = (
+            _CANCELLATION_WORDS[language]
+            - {"no"}
+        )
+
+        if normalized_message in exit_words:
+            return self._exit_booking_management(
+                context
+            )
+
+        if (
+            management.next_step
+            is BookingManagementStep.PHONE
+        ):
+            return self._handle_booking_management_phone(
+                context,
+                message,
+            )
+
+        if (
+            management.next_step
+            is BookingManagementStep.SELECTION
+        ):
+            return self._handle_booking_management_selection(
+                context,
+                message,
+            )
+
+        if (
+            management.next_step
+            is BookingManagementStep.CONFIRMATION
+        ):
+            return self._handle_booking_management_confirmation(
+                context,
+                message,
+            )
+
+        raise ValueError(
+            "Cannot continue completed booking management."
+        )
+
+    def _exit_booking_management(
+        self,
+        context: Any,
+    ) -> Response:
+        """
+        End existing-booking management without making changes.
+        """
+
+        language = self._get_language(context)
+
+        context.reset_booking_management()
+        context.clear_active_capability()
+
+        return Response(
+            text=_BOOKING_MANAGEMENT_EXIT_TEXTS[
+                language
+            ],
+            metadata={
+                "capability": self.name,
+                "handled": True,
+                "booking_management_step": (
+                    BookingManagementStep.COMPLETE.value
+                ),
+                "booking_cancelled": False,
+                "language": language.value,
+            },
+        )
+
+    def _handle_booking_management_phone(
+        self,
+        context: Any,
+        message: str,
+    ) -> Response:
+        """
+        Parse the phone and locate active bookings.
+        """
+
+        management = context.booking_management
+
+        if management is None:
+            raise ValueError(
+                "Cannot locate bookings without management state."
+            )
+
+        language = self._get_language(context)
+
+        try:
+            phone = self._phone_service.parse(
+                message
+            )
+        except PhoneNumberError:
+            return Response(
+                text=self._text(
+                    context,
+                    "invalid_phone",
+                ),
+                metadata={
+                    "capability": self.name,
+                    "handled": True,
+                    "booking_management_step": (
+                        BookingManagementStep.PHONE.value
+                    ),
+                    "language": language.value,
+                },
+            )
+
+        active_bookings = (
+            self._booking_service.find_active_bookings_by_phone(
+                phone.e164
+            )
+            if self._booking_service is not None
+            else ()
+        )
+
+        if not active_bookings:
+            management.phone = None
+            management.matching_bookings = ()
+            management.selected_booking = None
+
+            return Response(
+                text=(
+                    _BOOKING_MANAGEMENT_TEXTS[
+                        language
+                    ]["no_active_bookings"]
+                ),
+                metadata={
+                    "capability": self.name,
+                    "handled": True,
+                    "booking_management_step": (
+                        BookingManagementStep.PHONE.value
+                    ),
+                    "language": language.value,
+                },
+            )
+
+        management.phone = phone.e164
+        management.matching_bookings = tuple(
+            active_bookings
+        )
+
+        if len(active_bookings) == 1:
+            management.selected_booking = (
+                active_bookings[0]
+            )
+
+            return Response(
+                text=(
+                    self._build_booking_cancellation_confirmation(
+                        context
+                    )
+                ),
+                metadata={
+                    "capability": self.name,
+                    "handled": True,
+                    "booking_management_step": (
+                        BookingManagementStep.CONFIRMATION.value
+                    ),
+                    "language": language.value,
+                },
+            )
+
+        management.selected_booking = None
+
+        return Response(
+            text=self._build_booking_selection_message(
+                context
+            ),
+            metadata={
+                "capability": self.name,
+                "handled": True,
+                "booking_management_step": (
+                    BookingManagementStep.SELECTION.value
+                ),
+                "language": language.value,
+            },
+        )
+
+    def _handle_booking_management_selection(
+        self,
+        context: Any,
+        message: str,
+    ) -> Response:
+        """
+        Select one active booking using its displayed number.
+        """
+
+        management = context.booking_management
+
+        if management is None:
+            raise ValueError(
+                "Cannot select a booking without management state."
+            )
+
+        language = self._get_language(context)
+        normalized_selection = message.strip()
+
+        try:
+            selected_index = int(
+                normalized_selection
+            ) - 1
+        except ValueError:
+            selected_index = -1
+
+        if (
+            selected_index < 0
+            or selected_index
+            >= len(management.matching_bookings)
+        ):
+            return Response(
+                text=(
+                    _BOOKING_MANAGEMENT_TEXTS[
+                        language
+                    ]["invalid_selection"].format(
+                        count=len(
+                            management.matching_bookings
+                        ),
+                    )
+                ),
+                metadata={
+                    "capability": self.name,
+                    "handled": True,
+                    "booking_management_step": (
+                        BookingManagementStep.SELECTION.value
+                    ),
+                    "language": language.value,
+                },
+            )
+
+        management.selected_booking = (
+            management.matching_bookings[
+                selected_index
+            ]
+        )
+
+        return Response(
+            text=(
+                self._build_booking_cancellation_confirmation(
+                    context
+                )
+            ),
+            metadata={
+                "capability": self.name,
+                "handled": True,
+                "booking_management_step": (
+                    BookingManagementStep.CONFIRMATION.value
+                ),
+                "language": language.value,
+            },
+        )
+
+    def _build_booking_selection_message(
+        self,
+        context: Any,
+    ) -> str:
+        """
+        Build the numbered list of active bookings.
+        """
+
+        management = context.booking_management
+
+        if management is None:
+            raise ValueError(
+                "Cannot list bookings without management state."
+            )
+
+        language = self._get_language(context)
+        appointment_name = (
+            "Cita"
+            if language is Language.ES
+            else "Appointment"
+        )
+        time_connector = (
+            "a las"
+            if language is Language.ES
+            else "at"
+        )
+
+        booking_lines = []
+
+        for index, booking in enumerate(
+            management.matching_bookings,
+            start=1,
+        ):
+            service_name = (
+                booking.service_name
+                or appointment_name
+            )
+
+            booking_lines.append(
+                f"{index}. {service_name} — "
+                f"{booking.date} {time_connector} "
+                f"{booking.time}"
+            )
+
+        return (
+            _BOOKING_MANAGEMENT_TEXTS[
+                language
+            ]["multiple_bookings"].format(
+                bookings="\n".join(
+                    booking_lines
+                ),
+            )
+        )
+
+    def _handle_booking_management_confirmation(
+        self,
+        context: Any,
+        message: str,
+    ) -> Response:
+        """
+        Confirm or reject cancellation of the selected booking.
+        """
+
+        management = context.booking_management
+
+        if (
+            management is None
+            or management.selected_booking is None
+        ):
+            raise ValueError(
+                "Cannot confirm cancellation without "
+                "a selected booking."
+            )
+
+        language = self._get_language(context)
+        normalized_message = self._normalize_text(
+            message
+        )
+
+        if normalized_message in _CONFIRMATION_WORDS[language]:
+            if self._booking_service is None:
+                raise ValueError(
+                    "Cannot cancel a booking without BookingService."
+                )
+
+            selected_booking = (
+                management.selected_booking
+            )
+
+            try:
+                cancelled_booking = (
+                    self._booking_service.cancel_booking(
+                        selected_booking
+                    )
+                )
+            except BookingAlreadyCancelledError:
+                context.reset_booking_management()
+                context.clear_active_capability()
+
+                return Response(
+                    text=(
+                        _BOOKING_MANAGEMENT_CONFLICT_TEXTS[
+                            language
+                        ]
+                    ),
+                    metadata={
+                        "capability": self.name,
+                        "handled": True,
+                        "booking_management_step": (
+                            BookingManagementStep.COMPLETE.value
+                        ),
+                        "booking_cancelled": False,
+                        "booking_conflict": True,
+                        "language": language.value,
+                    },
+                )
+
+            management.complete()
+
+            response = Response(
+                text=self._build_cancelled_booking_message(
+                    context,
+                    cancelled_booking,
+                ),
+                metadata={
+                    "capability": self.name,
+                    "handled": True,
+                    "booking_management_step": (
+                        BookingManagementStep.COMPLETE.value
+                    ),
+                    "booking_cancelled": True,
+                    "booking_conflict": False,
+                    "language": language.value,
+                },
+            )
+
+            context.reset_booking_management()
+            context.clear_active_capability()
+
+            return response
+
+        if normalized_message in _CANCELLATION_WORDS[language]:
+            context.reset_booking_management()
+            context.clear_active_capability()
+
+            return Response(
+                text=(
+                    _BOOKING_MANAGEMENT_TEXTS[
+                        language
+                    ]["cancellation_rejected"]
+                ),
+                metadata={
+                    "capability": self.name,
+                    "handled": True,
+                    "booking_management_step": (
+                        BookingManagementStep.COMPLETE.value
+                    ),
+                    "booking_cancelled": False,
+                    "booking_conflict": False,
+                    "language": language.value,
+                },
+            )
+
+        return Response(
+            text=(
+                _BOOKING_MANAGEMENT_TEXTS[
+                    language
+                ]["unknown_confirmation"]
+            ),
+            metadata={
+                "capability": self.name,
+                "handled": True,
+                "booking_management_step": (
+                    BookingManagementStep.CONFIRMATION.value
+                ),
+                "language": language.value,
+            },
+        )
+
+    def _build_cancelled_booking_message(
+        self,
+        context: Any,
+        booking: Any,
+    ) -> str:
+        """
+        Build the successful cancellation response.
+        """
+
+        language = self._get_language(context)
+        service_line = ""
+
+        if booking.service_name:
+            service_label = (
+                "Servicio"
+                if language is Language.ES
+                else "Service"
+            )
+            service_line = (
+                f"{service_label}: "
+                f"{booking.service_name}\n"
+            )
+
+        return (
+            _BOOKING_MANAGEMENT_TEXTS[
+                language
+            ]["cancellation_complete"].format(
+                service_line=service_line,
+                date=booking.date,
+                time=booking.time,
+            )
+        )
+
+    def _build_booking_cancellation_confirmation(
+        self,
+        context: Any,
+    ) -> str:
+        """
+        Build the confirmation summary for the selected booking.
+        """
+
+        management = context.booking_management
+
+        if (
+            management is None
+            or management.selected_booking is None
+        ):
+            raise ValueError(
+                "Cannot build cancellation confirmation "
+                "without a selected booking."
+            )
+
+        language = self._get_language(context)
+        booking = management.selected_booking
+
+        service_line = ""
+
+        if booking.service_name:
+            service_label = (
+                "Servicio"
+                if language is Language.ES
+                else "Service"
+            )
+            service_line = (
+                f"{service_label}: "
+                f"{booking.service_name}\n"
+            )
+
+        return (
+            _BOOKING_MANAGEMENT_TEXTS[
+                language
+            ]["cancellation_confirmation"].format(
+                service_line=service_line,
+                date=booking.date,
+                time=booking.time,
+            )
         )
 
     def _cancel_booking(

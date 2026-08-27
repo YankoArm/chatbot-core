@@ -4,7 +4,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from chatbot.activation import ActivationState
-from chatbot.booking import BookingState
+from chatbot.booking import (
+    BookingManagementState,
+    BookingState,
+)
 from chatbot.language import Language
 
 
@@ -14,8 +17,9 @@ class ConversationContext:
     Runtime memory of an ongoing conversation.
 
     ConversationContext preserves the user's language, objective, active
-    capability, booking state, temporary variables and delegation state
-    across messages belonging to the same session.
+    capability, booking state, booking-management state, temporary
+    variables and delegation state across messages belonging to the same
+    session.
     """
 
     session_id: str
@@ -25,6 +29,7 @@ class ConversationContext:
     active_capability: str | None = None
     language: Language | None = None
     booking: BookingState | None = None
+    booking_management: BookingManagementState | None = None
 
     knowledge_service: Any | None = None
 
@@ -128,10 +133,17 @@ class ConversationContext:
 
     def reset_booking(self) -> None:
         """
-        Remove the current booking state.
+        Remove the current new-booking state.
         """
 
         self.booking = None
+
+    def reset_booking_management(self) -> None:
+        """
+        Remove the current existing-booking management state.
+        """
+
+        self.booking_management = None
 
     def reset(self) -> None:
         """
@@ -145,6 +157,7 @@ class ConversationContext:
         self.active_capability = None
         self.language = None
         self.booking = None
+        self.booking_management = None
 
         self.previous_capabilities.clear()
         self.variables.clear()
