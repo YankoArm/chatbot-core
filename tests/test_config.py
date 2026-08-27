@@ -191,3 +191,80 @@ def test_load_client_id_from_environment(
     config = FlowForgeConfig.load()
 
     assert config.client_id == "hairdressing_demo"
+
+def test_booking_database_path_defaults_to_client_specific_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "WHATSAPP_ACCESS_TOKEN",
+        "token",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_PHONE_NUMBER_ID",
+        "phone",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_VERIFY_TOKEN",
+        "verify",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_APP_SECRET",
+        "secret",
+    )
+    monkeypatch.setenv(
+        "FLOWFORGE_CLIENT_ID",
+        "hairdressing_demo",
+    )
+    monkeypatch.delenv(
+        "FLOWFORGE_PORT",
+        raising=False,
+    )
+    monkeypatch.delenv(
+        "FLOWFORGE_BOOKING_DATABASE_PATH",
+        raising=False,
+    )
+
+    config = FlowForgeConfig.load()
+
+    assert config.booking_database_path == (
+        "data/hairdressing_demo_bookings.sqlite3"
+    )
+
+
+def test_booking_database_path_can_be_loaded_from_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "WHATSAPP_ACCESS_TOKEN",
+        "token",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_PHONE_NUMBER_ID",
+        "phone",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_VERIFY_TOKEN",
+        "verify",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_APP_SECRET",
+        "secret",
+    )
+    monkeypatch.setenv(
+        "FLOWFORGE_CLIENT_ID",
+        "hairdressing_demo",
+    )
+    monkeypatch.delenv(
+        "FLOWFORGE_PORT",
+        raising=False,
+    )
+    monkeypatch.setenv(
+        "FLOWFORGE_BOOKING_DATABASE_PATH",
+        "persistent/appointments.sqlite3",
+    )
+
+    config = FlowForgeConfig.load()
+
+    assert config.booking_database_path == (
+        "persistent/appointments.sqlite3"
+    )

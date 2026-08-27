@@ -9,8 +9,10 @@ from fastapi import FastAPI
 from chatbot.api.whatsapp_app import build_whatsapp_api
 from chatbot.application import Bootstrap
 from chatbot.booking import (
+    BookingRepository,
     BookingService,
     InMemoryBookingRepository,
+    SQLiteBookingRepository,
     build_booking_configuration,
 )
 from chatbot.calendar import CalendarService
@@ -33,18 +35,38 @@ from run_google_calendar import build_calendar_service
 logger = logging.getLogger(__name__)
 
 
+def build_booking_repository(
+    config: FlowForgeConfig,
+) -> SQLiteBookingRepository:
+    """
+    Build the persistent booking repository for production.
+    """
+
+    database_path = config.booking_database_path
+
+    if database_path is None:
+        raise ValueError(
+            "Booking database path is not configured."
+        )
+
+    return SQLiteBookingRepository(
+        database_path=database_path,
+    )
+
+
 def create_app(
     *,
     config: FlowForgeConfig,
     calendar_service: CalendarService | None,
     graph_client: WhatsAppGraphClientProtocol,
+    booking_repository: BookingRepository | None = None,
 ) -> FastAPI:
     """
-    Build the production FlowForge WhatsApp application.
+    Build the FlowForge WhatsApp application.
 
     The configured client is loaded from the central client registry.
-    Dependencies are received explicitly so the composition can be
-    tested without connecting to Meta or Google Calendar.
+    Dependencies can be supplied explicitly so composition can be
+    tested without connecting to Meta, Google Calendar or SQLite.
 
     Booking is removed from the runtime when Calendar is unavailable,
     while the remaining client capabilities continue working.
@@ -55,6 +77,9 @@ def create_app(
     )
 
     capability_factories: dict[str, object] = {}
+    active_booking_repository: (
+        BookingRepository | None
+    ) = None
 
     if calendar_service is not None:
         booking_configuration = (
@@ -63,12 +88,14 @@ def create_app(
             )
         )
 
-        booking_repository = (
-            InMemoryBookingRepository()
+        active_booking_repository = (
+            booking_repository
+            if booking_repository is not None
+            else InMemoryBookingRepository()
         )
 
         booking_service = BookingService(
-            repository=booking_repository,
+            repository=active_booking_repository,
             calendar_service=calendar_service,
         )
 
@@ -120,6 +147,21 @@ def create_app(
     )
 
     app.state.flowforge_instance = instance
+    app.state.booking_repository = (
+        active_booking_repository
+    )
+
+    close_repository = getattr(
+        active_booking_repository,
+        "close",
+        None,
+    )
+
+    if callable(close_repository):
+        app.add_event_handler(
+            "shutdown",
+            close_repository,
+        )
 
     return app
 
@@ -153,10 +195,19 @@ def create_production_app(
         phone_number_id=config.whatsapp.phone_number_id,
     )
 
+    booking_repository = (
+        build_booking_repository(
+            config
+        )
+        if calendar_service is not None
+        else None
+    )
+
     return create_app(
         config=config,
         calendar_service=calendar_service,
         graph_client=graph_client,
+        booking_repository=booking_repository,
     )
 
 
@@ -182,6 +233,11 @@ def main() -> None:
     logger.info(
         "Starting FlowForge client: %s",
         config.client_id,
+    )
+
+    logger.info(
+        "Booking database: %s",
+        config.booking_database_path,
     )
 
     uvicorn.run(

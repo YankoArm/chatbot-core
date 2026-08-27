@@ -34,3 +34,27 @@ def test_cli_rejects_unknown_client():
                 "missing_client",
             ]
         )
+
+def test_cli_booking_database_is_optional():
+    parser = build_argument_parser()
+
+    arguments = parser.parse_args([])
+
+    assert arguments.booking_database is None
+
+
+def test_cli_accepts_custom_booking_database():
+    parser = build_argument_parser()
+
+    arguments = parser.parse_args(
+        [
+            "--client",
+            "hairdressing_demo",
+            "--booking-database",
+            "persistent/demo.sqlite3",
+        ]
+    )
+
+    assert arguments.booking_database == (
+        "persistent/demo.sqlite3"
+    )

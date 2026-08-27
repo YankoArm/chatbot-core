@@ -27,9 +27,44 @@ class FlowForgeConfig:
     whatsapp: WhatsAppConfig
     server: ServerConfig
     client_id: str = "tarot_alvin"
+    booking_database_path: str | None = None
+
+    def __post_init__(self) -> None:
+        """
+        Resolve a client-specific default booking database path.
+        """
+
+        configured_path = self.booking_database_path
+
+        if (
+            configured_path is None
+            or not configured_path.strip()
+        ):
+            configured_path = (
+                f"data/{self.client_id}_bookings.sqlite3"
+            )
+        else:
+            configured_path = (
+                configured_path.strip()
+            )
+
+        object.__setattr__(
+            self,
+            "booking_database_path",
+            configured_path,
+        )
 
     @classmethod
     def load(cls) -> "FlowForgeConfig":
+        client_id = _environment_text(
+            "FLOWFORGE_CLIENT_ID",
+            "tarot_alvin",
+        )
+
+        booking_database_path = os.getenv(
+            "FLOWFORGE_BOOKING_DATABASE_PATH"
+        )
+
         return cls(
             whatsapp=WhatsAppConfig(
                 access_token=_required_environment_variable(
@@ -58,9 +93,9 @@ class FlowForgeConfig:
                     ),
                 ),
             ),
-            client_id=_environment_text(
-                "FLOWFORGE_CLIENT_ID",
-                "tarot_alvin",
+            client_id=client_id,
+            booking_database_path=(
+                booking_database_path
             ),
         )
 

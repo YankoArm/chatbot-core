@@ -20,6 +20,9 @@ from chatbot.booking.service import (
     BookingService,
     BookingSlotUnavailableError,
 )
+from chatbot.booking.sqlite_repository import (
+    SQLiteBookingRepository,
+)
 from chatbot.booking.state import (
     BookingState,
     BookingStep,
@@ -39,5 +42,6 @@ __all__ = [
     "BookingStatus",
     "BookingStep",
     "InMemoryBookingRepository",
+    "SQLiteBookingRepository",
     "build_booking_configuration",
 ]

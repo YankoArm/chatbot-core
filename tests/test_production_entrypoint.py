@@ -2,12 +2,20 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from chatbot.booking import (
+    InMemoryBookingRepository,
+    SQLiteBookingRepository,
+)
+
 from chatbot.infrastructure.config import (
     FlowForgeConfig,
     ServerConfig,
     WhatsAppConfig,
 )
-from run_flowforge import create_app
+from run_flowforge import (
+    build_booking_repository,
+    create_app,
+)
 
 
 class FakeCalendarService:
@@ -150,3 +158,65 @@ def test_create_app_uses_configured_client_instance() -> None:
         "help",
         "human_transfer",
     ]
+
+def test_build_booking_repository_uses_configured_sqlite_path(
+    tmp_path,
+) -> None:
+    database_path = (
+        tmp_path
+        / "production-bookings.sqlite3"
+    )
+
+    config = FlowForgeConfig(
+        whatsapp=WhatsAppConfig(
+            access_token="test-access-token",
+            phone_number_id="test-phone-number-id",
+            verify_token="test-verify-token",
+            app_secret="test-app-secret",
+        ),
+        server=ServerConfig(
+            host="127.0.0.1",
+            port=8000,
+        ),
+        client_id="hairdressing_demo",
+        booking_database_path=str(
+            database_path
+        ),
+    )
+
+    repository = build_booking_repository(
+        config
+    )
+
+    assert isinstance(
+        repository,
+        SQLiteBookingRepository,
+    )
+    assert database_path.exists()
+
+    repository.close()
+
+
+def test_create_app_uses_provided_booking_repository() -> None:
+    config = FlowForgeConfig(
+        whatsapp=WhatsAppConfig(
+            access_token="test-access-token",
+            phone_number_id="test-phone-number-id",
+            verify_token="test-verify-token",
+            app_secret="test-app-secret",
+        ),
+        server=ServerConfig(
+            host="127.0.0.1",
+            port=8000,
+        ),
+    )
+    repository = InMemoryBookingRepository()
+
+    app = create_app(
+        config=config,
+        calendar_service=FakeCalendarService(),
+        graph_client=FakeWhatsAppGraphClient(),
+        booking_repository=repository,
+    )
+
+    assert app.state.booking_repository is repository

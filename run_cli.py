@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from chatbot.application import Bootstrap
 from chatbot.booking import (
     BookingService,
-    InMemoryBookingRepository,
+    SQLiteBookingRepository,
     build_booking_configuration,
 )
 from chatbot.capabilities.booking import (
@@ -47,6 +47,15 @@ def build_argument_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    parser.add_argument(
+        "--booking-database",
+        default=None,
+        help=(
+            "SQLite booking database path. "
+            "Defaults to a client-specific file inside data."
+        ),
+    )
+
     return parser
 
 
@@ -73,60 +82,79 @@ def main(
 
     calendar_service = build_calendar_service()
 
+    booking_database_path = (
+        arguments.booking_database
+        or (
+            f"data/"
+            f"{instance.id}_bookings.sqlite3"
+        )
+    )
+
     booking_repository = (
-        InMemoryBookingRepository()
+        SQLiteBookingRepository(
+            database_path=booking_database_path,
+        )
     )
 
-    booking_service = BookingService(
-        repository=booking_repository,
-        calendar_service=calendar_service,
-    )
+    try:
+        booking_service = BookingService(
+            repository=booking_repository,
+            calendar_service=calendar_service,
+        )
 
-    bootstrap = Bootstrap(
-        capability_factories={
-            "booking": lambda: BookingCapability(
-                booking_service=booking_service,
-                business_hours=(
-                    booking_configuration.business_hours
+        bootstrap = Bootstrap(
+            capability_factories={
+                "booking": lambda: BookingCapability(
+                    booking_service=booking_service,
+                    business_hours=(
+                        booking_configuration.business_hours
+                    ),
+                    booking_rules=(
+                        booking_configuration.booking_rules
+                    ),
+                    services=(
+                        booking_configuration.services
+                    ),
                 ),
-                booking_rules=(
-                    booking_configuration.booking_rules
-                ),
-                services=(
-                    booking_configuration.services
-                ),
-            ),
-        },
-    )
+            },
+        )
 
-    application = bootstrap.build_from_instance(
-        instance,
-    )
+        application = bootstrap.build_from_instance(
+            instance,
+        )
 
-    application_channel = ApplicationChannel(
-        application,
-    )
+        application_channel = ApplicationChannel(
+            application,
+        )
 
-    cli = CLIChannel(
-        application_channel,
-    )
+        cli = CLIChannel(
+            application_channel,
+        )
 
-    print("=" * 50)
-    print(f" FlowForge CLI - {instance.name}")
-    print("=" * 50)
-    print(f"Client: {instance.id}")
-    print(
-        "Google Calendar integration enabled."
-    )
-    print(
-        "Client booking configuration loaded."
-    )
-    print(
-        "Type 'exit', 'quit' or 'salir' to close."
-    )
-    print()
+        print("=" * 50)
+        print(
+            f" FlowForge CLI - {instance.name}"
+        )
+        print("=" * 50)
+        print(f"Client: {instance.id}")
+        print(
+            "Google Calendar integration enabled."
+        )
+        print(
+            "Client booking configuration loaded."
+        )
+        print(
+            "Booking database: "
+            f"{booking_database_path}"
+        )
+        print(
+            "Type 'exit', 'quit' or 'salir' to close."
+        )
+        print()
 
-    cli.run()
+        cli.run()
+    finally:
+        booking_repository.close()
 
 
 if __name__ == "__main__":
