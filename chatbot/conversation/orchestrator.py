@@ -202,16 +202,28 @@ class ConversationOrchestrator:
         """
         Return whether the context contains an active unfinished flow.
 
-        Booking is currently the first stateful capability. More stateful
-        capabilities can later be introduced without changing the public
-        process method.
+        Booking can represent either creation of a new appointment or
+        management of an existing one. Both states preserve control of
+        subsequent structured messages such as phones, dates and times.
         """
 
-        return (
-            context.active_capability == "booking"
-            and context.booking is not None
+        if context.active_capability != "booking":
+            return False
+
+        booking_is_active = (
+            context.booking is not None
             and context.booking.next_step
             is not BookingStep.COMPLETE
+        )
+
+        management_is_active = (
+            context.booking_management is not None
+            and not context.booking_management.completed
+        )
+
+        return (
+            booking_is_active
+            or management_is_active
         )
 
     def _delegate_message(

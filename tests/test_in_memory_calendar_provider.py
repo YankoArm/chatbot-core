@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from zoneinfo import ZoneInfo
 import pytest
 
 from chatbot.calendar import (
@@ -223,3 +224,72 @@ def test_provider_rejects_rescheduling_unknown_booking() -> None:
             start=make_datetime(12),
             end=make_datetime(13),
         )
+
+
+def test_provider_compares_naive_and_aware_local_datetimes(
+) -> None:
+    provider = InMemoryCalendarProvider(
+        timezone_name="Europe/Madrid",
+    )
+
+    provider.create_booking(
+        start=datetime(
+            2026,
+            8,
+            27,
+            10,
+            0,
+        ),
+        end=datetime(
+            2026,
+            8,
+            27,
+            11,
+            0,
+        ),
+        title="Naive local appointment",
+    )
+
+    timezone = ZoneInfo(
+        "Europe/Madrid"
+    )
+
+    bookings = provider.list_bookings(
+        start=datetime(
+            2026,
+            8,
+            27,
+            9,
+            30,
+            tzinfo=timezone,
+        ),
+        end=datetime(
+            2026,
+            8,
+            27,
+            11,
+            30,
+            tzinfo=timezone,
+        ),
+    )
+
+    assert len(bookings) == 1
+
+    assert provider.is_available(
+        start=datetime(
+            2026,
+            8,
+            27,
+            10,
+            30,
+            tzinfo=timezone,
+        ),
+        end=datetime(
+            2026,
+            8,
+            27,
+            11,
+            30,
+            tzinfo=timezone,
+        ),
+    ) is False

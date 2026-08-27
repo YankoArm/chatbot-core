@@ -81,3 +81,44 @@ def test_orchestrator_does_not_duplicate_active_capability_history():
 
     assert context.active_capability == "booking"
     assert context.previous_capabilities == []
+
+def test_orchestrator_continues_active_booking_management_flow(
+) -> None:
+    manager = CapabilityManager()
+    manager.register(
+        BookingCapability()
+    )
+
+    orchestrator = ConversationOrchestrator(
+        manager
+    )
+    context = ConversationContext(
+        session_id="active-booking-management"
+    )
+
+    start_response = orchestrator.process(
+        context=context,
+        message="Quiero cambiar mi cita",
+    )
+
+    assert start_response.metadata[
+        "booking_management_step"
+    ] == "phone"
+    assert context.booking is None
+    assert context.booking_management is not None
+    assert context.active_capability == "booking"
+
+    response = orchestrator.process(
+        context=context,
+        message="600123123",
+    )
+
+    assert response.metadata[
+        "capability"
+    ] == "booking"
+    assert response.metadata[
+        "booking_management_step"
+    ] == "phone"
+    assert response.metadata["handled"] is True
+    assert "ninguna cita activa" in response.text.lower()
+    assert context.booking_management is not None

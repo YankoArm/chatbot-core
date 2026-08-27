@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Any
 from uuid import uuid4
 
@@ -14,7 +15,28 @@ class InMemoryCalendarProvider(CalendarProvider):
     Bookings are stored only for the lifetime of the provider instance.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        timezone_name: str = "Europe/Madrid",
+    ) -> None:
+        normalized_timezone = timezone_name.strip()
+
+        if not normalized_timezone:
+            raise ValueError(
+                "Calendar timezone cannot be empty."
+            )
+
+        try:
+            timezone = ZoneInfo(
+                normalized_timezone
+            )
+        except Exception as exc:
+            raise ValueError(
+                "Calendar timezone is invalid."
+            ) from exc
+
+        self._timezone_name = normalized_timezone
+        self._timezone = timezone
         self._bookings: dict[
             str,
             dict[str, Any],
@@ -209,29 +231,90 @@ class InMemoryCalendarProvider(CalendarProvider):
 
         return sorted(
             bookings,
-            key=lambda booking: booking["start"],
+            key=lambda booking: (
+                self._normalize_datetime(
+                    booking["start"]
+                )
+            ),
         )
 
-    @staticmethod
     def _validate_time_range(
+        self,
         *,
         start: datetime,
         end: datetime,
     ) -> None:
-        if end <= start:
+        normalized_start = (
+            self._normalize_datetime(
+                start
+            )
+        )
+        normalized_end = (
+            self._normalize_datetime(
+                end
+            )
+        )
+
+        if normalized_end <= normalized_start:
             raise ValueError(
                 "Booking end must be after start."
             )
 
-    @staticmethod
     def _ranges_overlap(
+        self,
         *,
         start: datetime,
         end: datetime,
         booking_start: datetime,
         booking_end: datetime,
     ) -> bool:
+        normalized_start = (
+            self._normalize_datetime(
+                start
+            )
+        )
+        normalized_end = (
+            self._normalize_datetime(
+                end
+            )
+        )
+        normalized_booking_start = (
+            self._normalize_datetime(
+                booking_start
+            )
+        )
+        normalized_booking_end = (
+            self._normalize_datetime(
+                booking_end
+            )
+        )
+
         return (
-            start < booking_end
-            and end > booking_start
+            normalized_start
+            < normalized_booking_end
+            and normalized_end
+            > normalized_booking_start
+        )
+
+    def _normalize_datetime(
+        self,
+        value: datetime,
+    ) -> datetime:
+        """
+        Normalize naive and aware values to the configured local timezone.
+
+        Naive values represent local business time. Aware values are
+        converted to that same timezone before comparisons are performed.
+        """
+
+        if (
+            value.tzinfo is None
+            or value.utcoffset() is None
+        ):
+            return value.replace(
+                tzinfo=self._timezone
+            )
+
+        return value.astimezone(
+            self._timezone
         )
