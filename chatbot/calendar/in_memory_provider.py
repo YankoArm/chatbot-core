@@ -98,6 +98,62 @@ class InMemoryCalendarProvider(CalendarProvider):
 
         return booking_id
 
+    def reschedule_booking(
+        self,
+        booking_id: str,
+        *,
+        start: datetime,
+        end: datetime,
+    ) -> None:
+        """
+        Change the time range of an existing booking.
+        """
+
+        self._validate_time_range(
+            start=start,
+            end=end,
+        )
+
+        normalized_booking_id = (
+            booking_id.strip()
+        )
+
+        if not normalized_booking_id:
+            raise ValueError(
+                "Booking ID cannot be empty."
+            )
+
+        if normalized_booking_id not in self._bookings:
+            raise KeyError(
+                f"Booking not found: "
+                f"{normalized_booking_id}"
+            )
+
+        overlaps_another_booking = any(
+            self._ranges_overlap(
+                start=start,
+                end=end,
+                booking_start=booking["start"],
+                booking_end=booking["end"],
+            )
+            for existing_id, booking
+            in self._bookings.items()
+            if existing_id != normalized_booking_id
+        )
+
+        if overlaps_another_booking:
+            raise ValueError(
+                "Requested time range is not available."
+            )
+
+        self._bookings[
+            normalized_booking_id
+        ]["start"] = start
+
+        self._bookings[
+            normalized_booking_id
+        ]["end"] = end
+
     def cancel_booking(
         self,
         booking_id: str,

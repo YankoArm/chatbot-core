@@ -22,6 +22,8 @@ class BookingManagementStep(str, Enum):
 
     PHONE = "phone"
     SELECTION = "selection"
+    DATE = "date"
+    TIME = "time"
     CONFIRMATION = "confirmation"
     COMPLETE = "complete"
 
@@ -37,6 +39,12 @@ class BookingManagementState:
     phone: str | None = None
     matching_bookings: tuple[Booking, ...] = ()
     selected_booking: Booking | None = None
+
+    new_date: str | None = None
+    new_time: str | None = None
+    available_dates: tuple[str, ...] = ()
+    available_times: tuple[str, ...] = ()
+
     completed: bool = False
 
     @property
@@ -53,6 +61,16 @@ class BookingManagementState:
 
         if self.selected_booking is None:
             return BookingManagementStep.SELECTION
+
+        if (
+            self.action
+            is BookingManagementAction.RESCHEDULE
+        ):
+            if not self.new_date:
+                return BookingManagementStep.DATE
+
+            if not self.new_time:
+                return BookingManagementStep.TIME
 
         return BookingManagementStep.CONFIRMATION
 
@@ -75,6 +93,19 @@ class BookingManagementState:
                 "without a selected booking."
             )
 
+        if (
+            self.action
+            is BookingManagementAction.RESCHEDULE
+            and (
+                not self.new_date
+                or not self.new_time
+            )
+        ):
+            raise ValueError(
+                "Cannot complete rescheduling without "
+                "a new date and time."
+            )
+
         self.completed = True
 
     def reset(self) -> None:
@@ -85,4 +116,10 @@ class BookingManagementState:
         self.phone = None
         self.matching_bookings = ()
         self.selected_booking = None
+
+        self.new_date = None
+        self.new_time = None
+        self.available_dates = ()
+        self.available_times = ()
+
         self.completed = False

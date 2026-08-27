@@ -171,3 +171,55 @@ def test_provider_raises_when_cancelling_missing_booking():
         provider.cancel_booking(
             "missing-booking"
         )
+
+def test_provider_reschedules_existing_booking() -> None:
+    provider = InMemoryCalendarProvider()
+
+    booking_id = provider.create_booking(
+        start=make_datetime(10),
+        end=make_datetime(11),
+        title="Original appointment",
+    )
+
+    provider.reschedule_booking(
+        booking_id,
+        start=make_datetime(12),
+        end=make_datetime(13),
+    )
+
+    assert provider.is_available(
+        start=make_datetime(10),
+        end=make_datetime(11),
+    ) is True
+
+    assert provider.is_available(
+        start=make_datetime(12),
+        end=make_datetime(13),
+    ) is False
+
+    bookings = provider.list_bookings(
+        start=make_datetime(11),
+        end=make_datetime(14),
+    )
+
+    assert len(bookings) == 1
+    assert bookings[0]["id"] == booking_id
+    assert bookings[0]["start"] == make_datetime(12)
+    assert bookings[0]["end"] == make_datetime(13)
+    assert bookings[0]["title"] == (
+        "Original appointment"
+    )
+
+
+def test_provider_rejects_rescheduling_unknown_booking() -> None:
+    provider = InMemoryCalendarProvider()
+
+    with pytest.raises(
+        KeyError,
+        match="Booking not found",
+    ):
+        provider.reschedule_booking(
+            "missing-booking",
+            start=make_datetime(12),
+            end=make_datetime(13),
+        )

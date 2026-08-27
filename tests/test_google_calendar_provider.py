@@ -44,6 +44,10 @@ class FakeGoogleEventsResource:
             dict[str, Any]
         ] = []
 
+        self.patch_calls: list[
+            dict[str, Any]
+        ] = []
+
         self.delete_calls: list[
             dict[str, Any]
         ] = []
@@ -79,6 +83,18 @@ class FakeGoogleEventsResource:
 
         return FakeGoogleRequest(
             self.insert_response
+        )
+
+    def patch(
+        self,
+        **kwargs: Any,
+    ) -> FakeGoogleRequest:
+        self.patch_calls.append(
+            kwargs
+        )
+
+        return FakeGoogleRequest(
+            None
         )
 
     def delete(
@@ -714,3 +730,51 @@ def test_google_provider_rejects_invalid_time_ranges(
             start=start,
             end=end,
         )
+
+def test_google_provider_reschedules_booking(
+    provider: GoogleCalendarProvider,
+    google_service: FakeGoogleCalendarService,
+) -> None:
+    provider.reschedule_booking(
+        "google-event-123",
+        start=datetime(
+            2026,
+            7,
+            25,
+            12,
+            30,
+        ),
+        end=datetime(
+            2026,
+            7,
+            25,
+            14,
+            0,
+        ),
+    )
+
+    assert (
+        google_service
+        .events_resource
+        .patch_calls
+    ) == [
+        {
+            "calendarId": "primary",
+            "eventId": "google-event-123",
+            "body": {
+                "start": {
+                    "dateTime": (
+                        "2026-07-25T12:30:00+02:00"
+                    ),
+                    "timeZone": "Europe/Madrid",
+                },
+                "end": {
+                    "dateTime": (
+                        "2026-07-25T14:00:00+02:00"
+                    ),
+                    "timeZone": "Europe/Madrid",
+                },
+            },
+            "sendUpdates": "none",
+        }
+    ]

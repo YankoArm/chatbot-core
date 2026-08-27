@@ -36,6 +36,15 @@ class FakeCalendarProvider(CalendarProvider):
     ) -> str:
         return "booking-123"
 
+    def reschedule_booking(
+        self,
+        booking_id: str,
+        *,
+        start: datetime,
+        end: datetime,
+    ) -> None:
+        pass
+
     def cancel_booking(
         self,
         booking_id: str,
@@ -470,3 +479,126 @@ def test_long_service_is_not_offered_in_a_short_remaining_gap() -> None:
     assert "11:30" in short_start_times
     assert "11:30" not in highlights_start_times
     assert highlights_slots == ()
+
+def test_calendar_service_reschedules_existing_booking() -> None:
+    provider = InMemoryCalendarProvider()
+
+    booking_id = provider.create_booking(
+        start=datetime(
+            2026,
+            7,
+            25,
+            10,
+            0,
+        ),
+        end=datetime(
+            2026,
+            7,
+            25,
+            11,
+            0,
+        ),
+        title="Original appointment",
+    )
+
+    service = CalendarService(
+        provider=provider,
+        default_duration_minutes=60,
+    )
+
+    service.reschedule_booking(
+        booking_id,
+        date="25/07/2026",
+        time="12:30",
+        duration_minutes=90,
+    )
+
+    bookings = provider.list_bookings(
+        start=datetime(
+            2026,
+            7,
+            25,
+            12,
+            0,
+        ),
+        end=datetime(
+            2026,
+            7,
+            25,
+            15,
+            0,
+        ),
+    )
+
+    assert len(bookings) == 1
+    assert bookings[0]["id"] == booking_id
+    assert bookings[0]["start"] == datetime(
+        2026,
+        7,
+        25,
+        12,
+        30,
+    )
+    assert bookings[0]["end"] == datetime(
+        2026,
+        7,
+        25,
+        14,
+        0,
+    )
+
+
+def test_calendar_service_rejects_unavailable_reschedule_slot(
+) -> None:
+    provider = InMemoryCalendarProvider()
+
+    booking_id = provider.create_booking(
+        start=datetime(
+            2026,
+            7,
+            25,
+            10,
+            0,
+        ),
+        end=datetime(
+            2026,
+            7,
+            25,
+            11,
+            0,
+        ),
+        title="Appointment to move",
+    )
+
+    provider.create_booking(
+        start=datetime(
+            2026,
+            7,
+            25,
+            12,
+            0,
+        ),
+        end=datetime(
+            2026,
+            7,
+            25,
+            13,
+            0,
+        ),
+        title="Existing appointment",
+    )
+
+    service = CalendarService(
+        provider=provider,
+        default_duration_minutes=60,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Requested booking time is not available",
+    ):
+        service.reschedule_booking(
+            booking_id,
+            date="25/07/2026",
+            time="12:30",
+        )

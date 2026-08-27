@@ -120,6 +120,38 @@ class CalendarService:
             metadata=metadata,
         )
 
+    def reschedule_booking(
+        self,
+        booking_id: str,
+        *,
+        date: str,
+        time: str,
+        duration_minutes: int | None = None,
+    ) -> None:
+        """
+        Check availability and move an existing calendar booking.
+        """
+
+        start, end = self.build_time_range(
+            date=date,
+            time=time,
+            duration_minutes=duration_minutes,
+        )
+
+        if not self._provider.is_available(
+            start=start,
+            end=end,
+        ):
+            raise ValueError(
+                "Requested booking time is not available."
+            )
+
+        self._provider.reschedule_booking(
+            booking_id,
+            start=start,
+            end=end,
+        )
+
     def cancel_booking(
         self,
         booking_id: str,

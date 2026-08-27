@@ -45,6 +45,20 @@ class CalendarProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def reschedule_booking(
+        self,
+        booking_id: str,
+        *,
+        start: datetime,
+        end: datetime,
+    ) -> None:
+        """
+        Change the time range of an existing booking.
+        """
+
+        raise NotImplementedError
+
+    @abstractmethod
     def cancel_booking(
         self,
         booking_id: str,

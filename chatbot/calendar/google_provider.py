@@ -173,6 +173,52 @@ class GoogleCalendarProvider(CalendarProvider):
 
         return normalized_event_id
 
+    def reschedule_booking(
+        self,
+        booking_id: str,
+        *,
+        start: datetime,
+        end: datetime,
+    ) -> None:
+        """
+        Update the time range of a Google Calendar event.
+        """
+
+        self._validate_time_range(
+            start=start,
+            end=end,
+        )
+
+        normalized_booking_id = (
+            booking_id.strip()
+        )
+
+        if not normalized_booking_id:
+            raise ValueError(
+                "Booking id cannot be empty."
+            )
+
+        event_body = {
+            "start": self._build_event_datetime(
+                start
+            ),
+            "end": self._build_event_datetime(
+                end
+            ),
+        }
+
+        (
+            self._service
+            .events()
+            .patch(
+                calendarId=self._calendar_id,
+                eventId=normalized_booking_id,
+                body=event_body,
+                sendUpdates=self._send_updates,
+            )
+            .execute()
+        )
+
     def cancel_booking(
         self,
         booking_id: str,

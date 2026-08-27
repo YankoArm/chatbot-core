@@ -79,6 +79,75 @@ class BookingService:
             if booking.status is BookingStatus.CONFIRMED
         )
 
+    def reschedule_booking(
+        self,
+        booking: Booking,
+        *,
+        date: str,
+        time: str,
+        duration_minutes: int | None = None,
+    ) -> Booking:
+        """
+        Move an active booking and persist its new date and time.
+
+        Calendar is updated before local persistence so a failed
+        external operation leaves the original booking unchanged.
+        Calendar availability conflicts are exposed through the
+        booking-domain BookingSlotUnavailableError.
+        """
+
+        if booking.status is BookingStatus.CANCELLED:
+            raise BookingAlreadyCancelledError(
+                "Cannot reschedule a cancelled booking."
+            )
+
+        if self._calendar_service is None:
+            raise ValueError(
+                "Cannot reschedule a booking without CalendarService."
+            )
+
+        calendar_booking_id = (
+            booking.calendar_booking_id
+        )
+
+        if (
+            calendar_booking_id is None
+            or not calendar_booking_id.strip()
+        ):
+            raise ValueError(
+                "Cannot reschedule without a calendar booking id."
+            )
+
+        resolved_duration = (
+            booking.duration_minutes
+            if booking.duration_minutes is not None
+            else duration_minutes
+        )
+
+        try:
+            self._calendar_service.reschedule_booking(
+                calendar_booking_id,
+                date=date,
+                time=time,
+                duration_minutes=resolved_duration,
+            )
+        except ValueError as exc:
+            raise BookingSlotUnavailableError(
+                str(exc)
+            ) from exc
+
+        updated_booking = replace(
+            booking,
+            date=date,
+            time=time,
+        )
+
+        self._repository.update(
+            updated_booking
+        )
+
+        return updated_booking
+
     def cancel_booking(
         self,
         booking: Booking,

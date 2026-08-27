@@ -848,3 +848,172 @@ def test_booking_service_returns_empty_when_phone_has_no_active_bookings(
     )
 
     assert result == ()
+
+def test_booking_service_reschedules_booking_and_updates_repository(
+) -> None:
+    repository = FakeBookingRepository()
+    calendar_service = Mock(
+        spec=CalendarService
+    )
+
+    booking = Booking(
+        name="Yanko",
+        phone="+34600123123",
+        date="30/08/2026",
+        time="16:30",
+        service_id="highlights",
+        service_name="Mechas",
+        duration_minutes=120,
+        calendar_booking_id="calendar-event-123",
+    )
+
+    service = BookingService(
+        repository=repository,
+        calendar_service=calendar_service,
+    )
+
+    updated_booking = service.reschedule_booking(
+        booking,
+        date="02/09/2026",
+        time="10:00",
+    )
+
+    calendar_service.reschedule_booking.assert_called_once_with(
+        "calendar-event-123",
+        date="02/09/2026",
+        time="10:00",
+        duration_minutes=120,
+    )
+
+    assert updated_booking.date == "02/09/2026"
+    assert updated_booking.time == "10:00"
+    assert updated_booking.calendar_booking_id == (
+        "calendar-event-123"
+    )
+    assert updated_booking.status is (
+        BookingStatus.CONFIRMED
+    )
+    assert repository.updated_booking == (
+        updated_booking
+    )
+
+
+def test_booking_service_does_not_update_repository_when_calendar_fails(
+) -> None:
+    repository = FakeBookingRepository()
+    calendar_service = Mock(
+        spec=CalendarService
+    )
+    calendar_service.reschedule_booking.side_effect = (
+        RuntimeError(
+            "Google Calendar update failed"
+        )
+    )
+
+    booking = Booking(
+        name="Yanko",
+        phone="+34600123123",
+        date="30/08/2026",
+        time="16:30",
+        duration_minutes=60,
+        calendar_booking_id="calendar-event-123",
+    )
+
+    service = BookingService(
+        repository=repository,
+        calendar_service=calendar_service,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="Google Calendar update failed",
+    ):
+        service.reschedule_booking(
+            booking,
+            date="02/09/2026",
+            time="10:00",
+        )
+
+    assert repository.updated_booking is None
+    assert booking.date == "30/08/2026"
+    assert booking.time == "16:30"
+
+
+def test_booking_service_rejects_reschedule_without_calendar_id(
+) -> None:
+    repository = FakeBookingRepository()
+    calendar_service = Mock(
+        spec=CalendarService
+    )
+
+    booking = Booking(
+        name="Yanko",
+        phone="+34600123123",
+        date="30/08/2026",
+        time="16:30",
+    )
+
+    service = BookingService(
+        repository=repository,
+        calendar_service=calendar_service,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="calendar booking id",
+    ):
+        service.reschedule_booking(
+            booking,
+            date="02/09/2026",
+            time="10:00",
+        )
+
+    calendar_service.reschedule_booking.assert_not_called()
+    assert repository.updated_booking is None
+
+def test_booking_service_translates_unavailable_reschedule_slot(
+) -> None:
+    repository = FakeBookingRepository()
+    calendar_service = Mock(
+        spec=CalendarService
+    )
+    calendar_service.reschedule_booking.side_effect = (
+        ValueError(
+            "Requested booking time is not available."
+        )
+    )
+
+    booking = Booking(
+        name="Yanko",
+        phone="+34600123123",
+        date="30/08/2026",
+        time="16:30",
+        duration_minutes=120,
+        calendar_booking_id="calendar-event-123",
+    )
+
+    service = BookingService(
+        repository=repository,
+        calendar_service=calendar_service,
+    )
+
+    with pytest.raises(
+        BookingSlotUnavailableError,
+        match="Requested booking time is not available",
+    ):
+        service.reschedule_booking(
+            booking,
+            date="02/09/2026",
+            time="12:30",
+        )
+
+    calendar_service.reschedule_booking.assert_called_once_with(
+        "calendar-event-123",
+        date="02/09/2026",
+        time="12:30",
+        duration_minutes=120,
+    )
+
+    assert repository.updated_booking is None
+    assert booking.date == "30/08/2026"
+    assert booking.time == "16:30"

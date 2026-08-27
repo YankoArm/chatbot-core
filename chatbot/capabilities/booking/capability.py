@@ -117,6 +117,180 @@ _EXISTING_BOOKING_CANCELLATION_PHRASES = {
     ),
 }
 
+_EXISTING_BOOKING_RESCHEDULE_PHRASES = {
+    Language.ES: (
+        "cambiar mi cita",
+        "cambiar una cita",
+        "reprogramar mi cita",
+        "reprogramar una cita",
+        "mover mi cita",
+        "mover una cita",
+        "cambiar mi reserva",
+        "reprogramar mi reserva",
+    ),
+    Language.EN: (
+        "reschedule my appointment",
+        "reschedule an appointment",
+        "change my appointment",
+        "change an appointment",
+        "move my appointment",
+        "move an appointment",
+        "reschedule my booking",
+    ),
+}
+
+_BOOKING_RESCHEDULE_START_TEXTS = {
+    Language.ES: (
+        "Para cambiar tu cita, indícame el número "
+        "de teléfono que usaste al reservar."
+    ),
+    Language.EN: (
+        "To reschedule your appointment, please provide "
+        "the phone number you used when booking."
+    ),
+}
+
+_BOOKING_RESCHEDULE_DATE_TEXTS = {
+    Language.ES: {
+        "available_dates": (
+            "Estas son las próximas fechas disponibles: "
+            "{dates}. ¿Qué nueva fecha prefieres?"
+        ),
+        "no_available_dates": (
+            "Ahora mismo no hay nuevas fechas disponibles "
+            "para reprogramar esa cita. Puedes intentarlo "
+            "más adelante o escribir «cancelar» para salir."
+        ),
+    },
+    Language.EN: {
+        "available_dates": (
+            "These are the next available dates: "
+            "{dates}. Which new date would you prefer?"
+        ),
+        "no_available_dates": (
+            "There are currently no new dates available "
+            "to reschedule that appointment. You can try "
+            "again later or write “cancel” to exit."
+        ),
+    },
+}
+
+_BOOKING_RESCHEDULE_TIME_TEXTS = {
+    Language.ES: {
+        "available_times": (
+            "Estas son las horas disponibles: "
+            "{times}. ¿Qué nueva hora prefieres?"
+        ),
+        "invalid_date": (
+            "Esa fecha no es válida. Elige una de las "
+            "fechas disponibles usando el formato DD/MM/YYYY."
+        ),
+        "no_available_times": (
+            "Ya no quedan horas disponibles para esa fecha. "
+            "Elige otra de las fechas disponibles."
+        ),
+    },
+    Language.EN: {
+        "available_times": (
+            "These times are available: "
+            "{times}. Which new time would you prefer?"
+        ),
+        "invalid_date": (
+            "That date is not valid. Choose one of the "
+            "available dates using the DD/MM/YYYY format."
+        ),
+        "no_available_times": (
+            "There are no available times left for that date. "
+            "Choose another available date."
+        ),
+    },
+}
+
+_BOOKING_RESCHEDULE_CONFIRMATION_TEXTS = {
+    Language.ES: {
+        "summary": (
+            "Estos son los datos del cambio:\n\n"
+            "Servicio: {service}\n"
+            "Fecha anterior: {old_date}\n"
+            "Hora anterior: {old_time}\n\n"
+            "Nueva fecha: {new_date}\n"
+            "Nueva hora: {new_time}\n\n"
+            "¿Quieres confirmar el cambio? Responde «sí» "
+            "para confirmar o «no» para conservar la cita actual."
+        ),
+        "invalid_time": (
+            "Esa hora no es válida. Elige una de las "
+            "horas disponibles usando el formato HH:MM."
+        ),
+    },
+    Language.EN: {
+        "summary": (
+            "Here are the reschedule details:\n\n"
+            "Service: {service}\n"
+            "Previous date: {old_date}\n"
+            "Previous time: {old_time}\n\n"
+            "New date: {new_date}\n"
+            "New time: {new_time}\n\n"
+            "Would you like to confirm the change? Reply “yes” "
+            "to confirm or “no” to keep the current appointment."
+        ),
+        "invalid_time": (
+            "That time is not valid. Choose one of the "
+            "available times using the HH:MM format."
+        ),
+    },
+}
+
+_BOOKING_RESCHEDULE_RESULT_TEXTS = {
+    Language.ES: {
+        "complete": (
+            "Tu cita se ha cambiado correctamente.\n\n"
+            "{service_line}"
+            "Nueva fecha: {date}\n"
+            "Nueva hora: {time}"
+        ),
+        "rejected": (
+            "No se ha realizado ningún cambio. "
+            "Tu cita conserva la fecha y hora anteriores."
+        ),
+        "unknown_confirmation": (
+            "No he entendido la respuesta. Responde «sí» "
+            "para confirmar el cambio o «no» para conservar "
+            "la cita actual."
+        ),
+    },
+    Language.EN: {
+        "complete": (
+            "Your appointment has been rescheduled successfully.\n\n"
+            "{service_line}"
+            "New date: {date}\n"
+            "New time: {time}"
+        ),
+        "rejected": (
+            "No changes have been made. Your appointment "
+            "keeps its previous date and time."
+        ),
+        "unknown_confirmation": (
+            "I did not understand that response. Reply “yes” "
+            "to confirm the change or “no” to keep the "
+            "current appointment."
+        ),
+    },
+}
+
+_BOOKING_RESCHEDULE_CONFLICT_TEXTS = {
+    Language.ES: (
+        "El horario elegido ya no está disponible. "
+        "Tu cita original no se ha modificado. Puedes iniciar "
+        "de nuevo el cambio para elegir otro horario."
+    ),
+    Language.EN: (
+        "The selected date and time are no longer available. "
+        "Your original appointment has not been changed. You "
+        "can start the reschedule again to choose another time."
+    ),
+}
+
 _BOOKING_MANAGEMENT_CONFLICT_TEXTS = {
     Language.ES: (
         "Esa cita ya no está activa. Es posible que se haya "
@@ -499,6 +673,15 @@ class BookingCapability(BaseCapability):
                     )
                 )
 
+            if self._is_existing_booking_reschedule(
+                message
+            ):
+                return (
+                    self._start_existing_booking_reschedule(
+                        context
+                    )
+                )
+
             if self._asks_for_available_dates(
                 message
             ):
@@ -538,6 +721,47 @@ class BookingCapability(BaseCapability):
                 context,
                 "already_confirmed",
             ),
+        )
+
+    def _is_existing_booking_reschedule(
+        self,
+        message: str,
+    ) -> bool:
+        normalized_message = self._normalize_text(
+            message
+        )
+
+        return any(
+            phrase in normalized_message
+            for language_phrases
+            in _EXISTING_BOOKING_RESCHEDULE_PHRASES.values()
+            for phrase in language_phrases
+        )
+
+    def _start_existing_booking_reschedule(
+        self,
+        context: Any,
+    ) -> Response:
+        language = self._get_language(context)
+
+        context.booking_management = (
+            BookingManagementState(
+                action=BookingManagementAction.RESCHEDULE,
+            )
+        )
+
+        return Response(
+            text=_BOOKING_RESCHEDULE_START_TEXTS[
+                language
+            ],
+            metadata={
+                "capability": self.name,
+                "handled": True,
+                "booking_management_step": (
+                    BookingManagementStep.PHONE.value
+                ),
+                "language": language.value,
+            },
         )
 
     def _is_existing_booking_cancellation(
@@ -633,8 +857,37 @@ class BookingCapability(BaseCapability):
 
         if (
             management.next_step
+            is BookingManagementStep.DATE
+        ):
+            return self._handle_booking_management_date(
+                context,
+                message,
+            )
+
+        if (
+            management.next_step
+            is BookingManagementStep.TIME
+        ):
+            return self._handle_booking_management_time(
+                context,
+                message,
+            )
+
+        if (
+            management.next_step
             is BookingManagementStep.CONFIRMATION
         ):
+            if (
+                management.action
+                is BookingManagementAction.RESCHEDULE
+            ):
+                return (
+                    self._handle_booking_reschedule_confirmation(
+                        context,
+                        message,
+                    )
+                )
+
             return self._handle_booking_management_confirmation(
                 context,
                 message,
@@ -749,6 +1002,16 @@ class BookingCapability(BaseCapability):
                 active_bookings[0]
             )
 
+            if (
+                management.action
+                is BookingManagementAction.RESCHEDULE
+            ):
+                return (
+                    self._start_booking_reschedule_date_selection(
+                        context
+                    )
+                )
+
             return Response(
                 text=(
                     self._build_booking_cancellation_confirmation(
@@ -776,6 +1039,64 @@ class BookingCapability(BaseCapability):
                 "handled": True,
                 "booking_management_step": (
                     BookingManagementStep.SELECTION.value
+                ),
+                "language": language.value,
+            },
+        )
+
+    def _start_booking_reschedule_date_selection(
+        self,
+        context: Any,
+    ) -> Response:
+        """
+        Load and present dates for an existing booking reschedule.
+        """
+
+        management = context.booking_management
+
+        if (
+            management is None
+            or management.selected_booking is None
+        ):
+            raise ValueError(
+                "Cannot offer dates without a selected booking."
+            )
+
+        language = self._get_language(context)
+        available_dates = tuple(
+            self._get_available_dates(
+                context=context,
+            )
+        )
+        management.available_dates = available_dates
+        management.new_date = None
+        management.new_time = None
+        management.available_times = ()
+
+        if available_dates:
+            text = (
+                _BOOKING_RESCHEDULE_DATE_TEXTS[
+                    language
+                ]["available_dates"].format(
+                    dates=", ".join(
+                        available_dates[:5]
+                    ),
+                )
+            )
+        else:
+            text = (
+                _BOOKING_RESCHEDULE_DATE_TEXTS[
+                    language
+                ]["no_available_dates"]
+            )
+
+        return Response(
+            text=text,
+            metadata={
+                "capability": self.name,
+                "handled": True,
+                "booking_management_step": (
+                    BookingManagementStep.DATE.value
                 ),
                 "language": language.value,
             },
@@ -837,6 +1158,16 @@ class BookingCapability(BaseCapability):
                 selected_index
             ]
         )
+
+        if (
+            management.action
+            is BookingManagementAction.RESCHEDULE
+        ):
+            return (
+                self._start_booking_reschedule_date_selection(
+                    context
+                )
+            )
 
         return Response(
             text=(
@@ -905,6 +1236,390 @@ class BookingCapability(BaseCapability):
                 bookings="\n".join(
                     booking_lines
                 ),
+            )
+        )
+
+    def _handle_booking_management_date(
+        self,
+        context: Any,
+        message: str,
+    ) -> Response:
+        """
+        Select a new date and present its available times.
+        """
+
+        management = context.booking_management
+
+        if (
+            management is None
+            or management.action
+            is not BookingManagementAction.RESCHEDULE
+            or management.selected_booking is None
+        ):
+            raise ValueError(
+                "Cannot select a date without a reschedule state."
+            )
+
+        language = self._get_language(context)
+        date_value = message.strip()
+
+        try:
+            normalized_date = datetime.strptime(
+                date_value,
+                "%d/%m/%Y",
+            ).strftime(
+                "%d/%m/%Y"
+            )
+        except ValueError:
+            normalized_date = None
+
+        if (
+            normalized_date is None
+            or normalized_date
+            not in management.available_dates
+        ):
+            return Response(
+                text=(
+                    _BOOKING_RESCHEDULE_TIME_TEXTS[
+                        language
+                    ]["invalid_date"]
+                ),
+                metadata={
+                    "capability": self.name,
+                    "handled": True,
+                    "booking_management_step": (
+                        BookingManagementStep.DATE.value
+                    ),
+                    "language": language.value,
+                },
+            )
+
+        available_times = self._get_available_times(
+            normalized_date,
+            context=context,
+        )
+
+        if not available_times:
+            management.new_date = None
+            management.new_time = None
+            management.available_times = ()
+
+            return Response(
+                text=(
+                    _BOOKING_RESCHEDULE_TIME_TEXTS[
+                        language
+                    ]["no_available_times"]
+                ),
+                metadata={
+                    "capability": self.name,
+                    "handled": True,
+                    "booking_management_step": (
+                        BookingManagementStep.DATE.value
+                    ),
+                    "language": language.value,
+                },
+            )
+
+        management.new_date = normalized_date
+        management.new_time = None
+        management.available_times = tuple(
+            available_times
+        )
+
+        return Response(
+            text=(
+                _BOOKING_RESCHEDULE_TIME_TEXTS[
+                    language
+                ]["available_times"].format(
+                    times=", ".join(
+                        available_times
+                    ),
+                )
+            ),
+            metadata={
+                "capability": self.name,
+                "handled": True,
+                "booking_management_step": (
+                    BookingManagementStep.TIME.value
+                ),
+                "language": language.value,
+            },
+        )
+
+    def _handle_booking_management_time(
+        self,
+        context: Any,
+        message: str,
+    ) -> Response:
+        """
+        Select a new time and request reschedule confirmation.
+        """
+
+        management = context.booking_management
+
+        if (
+            management is None
+            or management.action
+            is not BookingManagementAction.RESCHEDULE
+            or management.selected_booking is None
+            or management.new_date is None
+        ):
+            raise ValueError(
+                "Cannot select a time without a reschedule date."
+            )
+
+        language = self._get_language(context)
+        time_value = message.strip()
+
+        try:
+            normalized_time = datetime.strptime(
+                time_value,
+                "%H:%M",
+            ).strftime(
+                "%H:%M"
+            )
+        except ValueError:
+            normalized_time = None
+
+        if (
+            normalized_time is None
+            or normalized_time
+            not in management.available_times
+        ):
+            return Response(
+                text=(
+                    _BOOKING_RESCHEDULE_CONFIRMATION_TEXTS[
+                        language
+                    ]["invalid_time"]
+                ),
+                metadata={
+                    "capability": self.name,
+                    "handled": True,
+                    "booking_management_step": (
+                        BookingManagementStep.TIME.value
+                    ),
+                    "language": language.value,
+                },
+            )
+
+        management.new_time = normalized_time
+
+        return Response(
+            text=(
+                self._build_booking_reschedule_confirmation(
+                    context
+                )
+            ),
+            metadata={
+                "capability": self.name,
+                "handled": True,
+                "booking_management_step": (
+                    BookingManagementStep.CONFIRMATION.value
+                ),
+                "language": language.value,
+            },
+        )
+
+    def _build_booking_reschedule_confirmation(
+        self,
+        context: Any,
+    ) -> str:
+        """
+        Build the old-versus-new booking confirmation summary.
+        """
+
+        management = context.booking_management
+
+        if (
+            management is None
+            or management.selected_booking is None
+            or management.new_date is None
+            or management.new_time is None
+        ):
+            raise ValueError(
+                "Cannot build an incomplete reschedule summary."
+            )
+
+        language = self._get_language(context)
+        booking = management.selected_booking
+
+        default_service = (
+            "Cita"
+            if language is Language.ES
+            else "Appointment"
+        )
+
+        return (
+            _BOOKING_RESCHEDULE_CONFIRMATION_TEXTS[
+                language
+            ]["summary"].format(
+                service=(
+                    booking.service_name
+                    or default_service
+                ),
+                old_date=booking.date,
+                old_time=booking.time,
+                new_date=management.new_date,
+                new_time=management.new_time,
+            )
+        )
+
+    def _handle_booking_reschedule_confirmation(
+        self,
+        context: Any,
+        message: str,
+    ) -> Response:
+        """
+        Confirm or reject an existing booking reschedule.
+        """
+
+        management = context.booking_management
+
+        if (
+            management is None
+            or management.action
+            is not BookingManagementAction.RESCHEDULE
+            or management.selected_booking is None
+            or management.new_date is None
+            or management.new_time is None
+        ):
+            raise ValueError(
+                "Cannot confirm an incomplete reschedule."
+            )
+
+        language = self._get_language(context)
+        normalized_message = self._normalize_text(
+            message
+        )
+
+        if normalized_message in _CONFIRMATION_WORDS[language]:
+            if self._booking_service is None:
+                raise ValueError(
+                    "Cannot reschedule without BookingService."
+                )
+
+            try:
+                updated_booking = (
+                    self._booking_service.reschedule_booking(
+                        management.selected_booking,
+                        date=management.new_date,
+                        time=management.new_time,
+                    )
+                )
+            except BookingSlotUnavailableError:
+                context.reset_booking_management()
+                context.clear_active_capability()
+
+                return Response(
+                    text=(
+                        _BOOKING_RESCHEDULE_CONFLICT_TEXTS[
+                            language
+                        ]
+                    ),
+                    metadata={
+                        "capability": self.name,
+                        "handled": True,
+                        "booking_management_step": (
+                            BookingManagementStep.COMPLETE.value
+                        ),
+                        "booking_rescheduled": False,
+                        "booking_conflict": True,
+                        "language": language.value,
+                    },
+                )
+
+            management.complete()
+
+            response = Response(
+                text=self._build_rescheduled_booking_message(
+                    context,
+                    updated_booking,
+                ),
+                metadata={
+                    "capability": self.name,
+                    "handled": True,
+                    "booking_management_step": (
+                        BookingManagementStep.COMPLETE.value
+                    ),
+                    "booking_rescheduled": True,
+                    "booking_conflict": False,
+                    "language": language.value,
+                },
+            )
+
+            context.reset_booking_management()
+            context.clear_active_capability()
+
+            return response
+
+        if normalized_message in _CANCELLATION_WORDS[language]:
+            context.reset_booking_management()
+            context.clear_active_capability()
+
+            return Response(
+                text=(
+                    _BOOKING_RESCHEDULE_RESULT_TEXTS[
+                        language
+                    ]["rejected"]
+                ),
+                metadata={
+                    "capability": self.name,
+                    "handled": True,
+                    "booking_management_step": (
+                        BookingManagementStep.COMPLETE.value
+                    ),
+                    "booking_rescheduled": False,
+                    "booking_conflict": False,
+                    "language": language.value,
+                },
+            )
+
+        return Response(
+            text=(
+                _BOOKING_RESCHEDULE_RESULT_TEXTS[
+                    language
+                ]["unknown_confirmation"]
+            ),
+            metadata={
+                "capability": self.name,
+                "handled": True,
+                "booking_management_step": (
+                    BookingManagementStep.CONFIRMATION.value
+                ),
+                "language": language.value,
+            },
+        )
+
+    def _build_rescheduled_booking_message(
+        self,
+        context: Any,
+        booking: Any,
+    ) -> str:
+        """
+        Build the successful reschedule response.
+        """
+
+        language = self._get_language(context)
+        service_line = ""
+
+        if booking.service_name:
+            service_label = (
+                "Servicio"
+                if language is Language.ES
+                else "Service"
+            )
+            service_line = (
+                f"{service_label}: "
+                f"{booking.service_name}\n"
+            )
+
+        return (
+            _BOOKING_RESCHEDULE_RESULT_TEXTS[
+                language
+            ]["complete"].format(
+                service_line=service_line,
+                date=booking.date,
+                time=booking.time,
             )
         )
 
@@ -2043,7 +2758,8 @@ class BookingCapability(BaseCapability):
         """
         Return booking rules adjusted to the selected service duration.
 
-        Generic bookings preserve the configured default duration.
+        New bookings obtain their duration from BookingState. Existing
+        bookings being rescheduled obtain it from the selected Booking.
         """
 
         if self._booking_rules is None:
@@ -2059,6 +2775,23 @@ class BookingCapability(BaseCapability):
             "service_duration_minutes",
             None,
         )
+
+        if duration_minutes is None:
+            management = getattr(
+                context,
+                "booking_management",
+                None,
+            )
+            selected_booking = getattr(
+                management,
+                "selected_booking",
+                None,
+            )
+            duration_minutes = getattr(
+                selected_booking,
+                "duration_minutes",
+                None,
+            )
 
         if duration_minutes is None:
             return self._booking_rules
