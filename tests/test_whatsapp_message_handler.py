@@ -387,3 +387,126 @@ def test_whatsapp_message_handler_processes_message_with_real_flowforge() -> Non
     assert result == expected_response
     assert graph_client.to == "34600000000"
     assert graph_client.text == expected_response
+
+class MessageIdParser:
+    def parse(
+        self,
+        payload: dict[str, object],
+    ) -> IncomingWhatsAppMessage:
+        message_id = payload["message_id"]
+
+        if not isinstance(message_id, str):
+            raise TypeError(
+                "message_id must be a string"
+            )
+
+        return IncomingWhatsAppMessage(
+            user_id="123",
+            text="Hola",
+            message_id=message_id,
+        )
+
+
+class CountingOrchestrator:
+    def __init__(
+        self,
+    ) -> None:
+        self.call_count = 0
+
+    def handle(
+        self,
+        message: object,
+    ) -> str:
+        self.call_count += 1
+        return "OK"
+
+
+class FailOnceSender:
+    def __init__(
+        self,
+    ) -> None:
+        self.call_count = 0
+
+    def send_text(
+        self,
+        recipient: str,
+        text: str,
+    ) -> None:
+        self.call_count += 1
+
+        if self.call_count == 1:
+            raise RuntimeError(
+                "Temporary WhatsApp sending failure"
+            )
+
+
+def test_whatsapp_message_handler_retries_after_sending_failure(
+) -> None:
+    orchestrator = CountingOrchestrator()
+    sender = FailOnceSender()
+
+    handler = WhatsAppMessageHandler(
+        parser=MessageIdParser(),
+        orchestrator=orchestrator,
+        sender=sender,
+    )
+
+    payload = {
+        "message_id": "wamid.retry-1",
+    }
+
+    try:
+        handler.handle(
+            payload
+        )
+    except RuntimeError as exc:
+        assert str(exc) == (
+            "Temporary WhatsApp sending failure"
+        )
+    else:
+        raise AssertionError(
+            "Expected the first sending attempt to fail"
+        )
+
+    result = handler.handle(
+        payload
+    )
+
+    assert result == "OK"
+    assert orchestrator.call_count == 2
+    assert sender.call_count == 2
+
+
+def test_whatsapp_message_handler_bounds_processed_id_cache(
+) -> None:
+    orchestrator = CountingOrchestrator()
+
+    handler = WhatsAppMessageHandler(
+        parser=MessageIdParser(),
+        orchestrator=orchestrator,
+        max_processed_message_ids=2,
+    )
+
+    handler.handle({
+        "message_id": "wamid.first",
+    })
+    handler.handle({
+        "message_id": "wamid.second",
+    })
+    handler.handle({
+        "message_id": "wamid.third",
+    })
+
+    duplicate_result = handler.handle({
+        "message_id": "wamid.third",
+    })
+
+    assert duplicate_result is None
+    assert orchestrator.call_count == 3
+
+    evicted_result = handler.handle({
+        "message_id": "wamid.first",
+    })
+
+    assert evicted_result == "OK"
+    assert orchestrator.call_count == 4
