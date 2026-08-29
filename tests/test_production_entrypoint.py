@@ -7,12 +7,17 @@ from chatbot.booking import (
     SQLiteBookingRepository,
 )
 
+from chatbot.instances import (
+    SQLiteInstanceDefinitionRepository,
+)
+
 from chatbot.infrastructure.config import (
     FlowForgeConfig,
     ServerConfig,
     WhatsAppConfig,
 )
 from run_flowforge import (
+    build_admin_repository,
     build_booking_repository,
     create_app,
 )
@@ -220,3 +225,125 @@ def test_create_app_uses_provided_booking_repository() -> None:
     )
 
     assert app.state.booking_repository is repository
+
+class ClosableBookingRepository(
+    InMemoryBookingRepository
+):
+    def __init__(
+        self,
+    ) -> None:
+        super().__init__()
+        self.closed = False
+
+    def close(
+        self,
+    ) -> None:
+        self.closed = True
+
+
+def test_create_app_closes_booking_repository_on_shutdown(
+) -> None:
+    config = FlowForgeConfig(
+        whatsapp=WhatsAppConfig(
+            access_token="test-access-token",
+            phone_number_id="test-phone-number-id",
+            verify_token="test-verify-token",
+            app_secret="test-app-secret",
+        ),
+        server=ServerConfig(
+            host="127.0.0.1",
+            port=8000,
+        ),
+        client_id="hairdressing_demo",
+    )
+    repository = ClosableBookingRepository()
+
+    app = create_app(
+        config=config,
+        calendar_service=FakeCalendarService(),
+        graph_client=FakeWhatsAppGraphClient(),
+        booking_repository=repository,
+    )
+
+    assert repository.closed is False
+
+    with TestClient(
+        app
+    ):
+        pass
+
+    assert repository.closed is True
+
+def test_build_admin_repository_uses_configured_sqlite_path(
+    tmp_path,
+) -> None:
+    database_path = (
+        tmp_path
+        / "flowforge-admin.sqlite3"
+    )
+
+    config = FlowForgeConfig(
+        whatsapp=WhatsAppConfig(
+            access_token="test-access-token",
+            phone_number_id="test-phone-number-id",
+            verify_token="test-verify-token",
+            app_secret="test-app-secret",
+        ),
+        server=ServerConfig(
+            host="127.0.0.1",
+            port=8000,
+        ),
+        admin_database_path=str(
+            database_path
+        ),
+    )
+
+    repository = build_admin_repository(
+        config
+    )
+
+    assert isinstance(
+        repository,
+        SQLiteInstanceDefinitionRepository,
+    )
+    assert database_path.exists()
+
+    repository.close()
+
+
+def test_create_app_uses_provided_admin_repository(
+) -> None:
+    admin_repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+
+    config = FlowForgeConfig(
+        whatsapp=WhatsAppConfig(
+            access_token="test-access-token",
+            phone_number_id="test-phone-number-id",
+            verify_token="test-verify-token",
+            app_secret="test-app-secret",
+        ),
+        server=ServerConfig(
+            host="127.0.0.1",
+            port=8000,
+        ),
+    )
+
+    app = create_app(
+        config=config,
+        calendar_service=FakeCalendarService(),
+        graph_client=FakeWhatsAppGraphClient(),
+        instance_definition_repository=(
+            admin_repository
+        ),
+    )
+
+    assert (
+        app.state.instance_definition_repository
+        is admin_repository
+    )
+
+    admin_repository.close()

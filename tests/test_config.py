@@ -268,3 +268,73 @@ def test_booking_database_path_can_be_loaded_from_environment(
     assert config.booking_database_path == (
         "persistent/appointments.sqlite3"
     )
+
+
+def test_admin_database_path_uses_shared_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "WHATSAPP_ACCESS_TOKEN",
+        "token",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_PHONE_NUMBER_ID",
+        "phone",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_VERIFY_TOKEN",
+        "verify",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_APP_SECRET",
+        "secret",
+    )
+    monkeypatch.delenv(
+        "FLOWFORGE_PORT",
+        raising=False,
+    )
+    monkeypatch.delenv(
+        "FLOWFORGE_ADMIN_DATABASE_PATH",
+        raising=False,
+    )
+
+    config = FlowForgeConfig.load()
+
+    assert config.admin_database_path == (
+        "data/flowforge_admin.sqlite3"
+    )
+
+
+def test_admin_database_path_can_be_loaded_from_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "WHATSAPP_ACCESS_TOKEN",
+        "token",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_PHONE_NUMBER_ID",
+        "phone",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_VERIFY_TOKEN",
+        "verify",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_APP_SECRET",
+        "secret",
+    )
+    monkeypatch.delenv(
+        "FLOWFORGE_PORT",
+        raising=False,
+    )
+    monkeypatch.setenv(
+        "FLOWFORGE_ADMIN_DATABASE_PATH",
+        "persistent/flowforge-admin.sqlite3",
+    )
+
+    config = FlowForgeConfig.load()
+
+    assert config.admin_database_path == (
+        "persistent/flowforge-admin.sqlite3"
+    )

@@ -6,7 +6,9 @@ from dataclasses import replace
 import uvicorn
 from fastapi import FastAPI
 
-from chatbot.api.whatsapp_app import build_whatsapp_api
+from chatbot.api.whatsapp_app import (
+    build_whatsapp_api,
+)
 from chatbot.application import Bootstrap
 from chatbot.booking import (
     BookingRepository,
@@ -16,8 +18,12 @@ from chatbot.booking import (
     build_booking_configuration,
 )
 from chatbot.calendar import CalendarService
-from chatbot.capabilities.booking import BookingCapability
-from chatbot.clients.registry import build_client_instance
+from chatbot.capabilities.booking import (
+    BookingCapability,
+)
+from chatbot.clients.registry import (
+    build_client_instance,
+)
 from chatbot.connectors.whatsapp.bootstrap import (
     WhatsAppGraphClientProtocol,
     build_whatsapp_message_handler,
@@ -28,8 +34,15 @@ from chatbot.connectors.whatsapp.graph_client import (
 from chatbot.connectors.whatsapp.signature import (
     WhatsAppSignatureVerifier,
 )
-from chatbot.infrastructure.config import FlowForgeConfig
-from run_google_calendar import build_calendar_service
+from chatbot.infrastructure.config import (
+    FlowForgeConfig,
+)
+from chatbot.instances import (
+    SQLiteInstanceDefinitionRepository,
+)
+from run_google_calendar import (
+    build_calendar_service,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -54,17 +67,38 @@ def build_booking_repository(
     )
 
 
+def build_admin_repository(
+    config: FlowForgeConfig,
+) -> SQLiteInstanceDefinitionRepository:
+    """
+    Build the shared editable client repository.
+    """
+
+    database_path = config.admin_database_path
+
+    if database_path is None:
+        raise ValueError(
+            "Admin database path is not configured."
+        )
+
+    return SQLiteInstanceDefinitionRepository(
+        database_path=database_path,
+    )
+
+
 def create_app(
     *,
     config: FlowForgeConfig,
     calendar_service: CalendarService | None,
     graph_client: WhatsAppGraphClientProtocol,
     booking_repository: BookingRepository | None = None,
+    instance_definition_repository: (
+        SQLiteInstanceDefinitionRepository | None
+    ) = None,
 ) -> FastAPI:
     """
-    Build the FlowForge WhatsApp application.
+    Build the FlowForge WhatsApp and administration application.
 
-    The configured client is loaded from the central client registry.
     Dependencies can be supplied explicitly so composition can be
     tested without connecting to Meta, Google Calendar or SQLite.
 
@@ -131,36 +165,66 @@ def create_app(
         instance,
     )
 
-    graph_message_handler = build_whatsapp_message_handler(
-        application=application,
-        graph_client=graph_client,
+    graph_message_handler = (
+        build_whatsapp_message_handler(
+            application=application,
+            graph_client=graph_client,
+        )
     )
 
-    signature_verifier = WhatsAppSignatureVerifier(
-        app_secret=config.whatsapp.app_secret,
+    signature_verifier = (
+        WhatsAppSignatureVerifier(
+            app_secret=(
+                config.whatsapp.app_secret
+            ),
+        )
     )
 
     app = build_whatsapp_api(
         message_handler=graph_message_handler,
-        verify_token=config.whatsapp.verify_token,
+        verify_token=(
+            config.whatsapp.verify_token
+        ),
         signature_verifier=signature_verifier,
+        instance_definition_repository=(
+            instance_definition_repository
+        ),
     )
 
     app.state.flowforge_instance = instance
     app.state.booking_repository = (
         active_booking_repository
     )
+    app.state.instance_definition_repository = (
+        instance_definition_repository
+    )
 
-    close_repository = getattr(
+    close_booking_repository = getattr(
         active_booking_repository,
         "close",
         None,
     )
 
-    if callable(close_repository):
-        app.add_event_handler(
+    if callable(
+        close_booking_repository
+    ):
+        app.router.add_event_handler(
             "shutdown",
-            close_repository,
+            close_booking_repository,
+        )
+
+    close_instance_repository = getattr(
+        instance_definition_repository,
+        "close",
+        None,
+    )
+
+    if callable(
+        close_instance_repository
+    ):
+        app.router.add_event_handler(
+            "shutdown",
+            close_instance_repository,
         )
 
     return app
@@ -173,9 +237,9 @@ def create_production_app(
     """
     Build the production FlowForge application.
 
-    The WhatsApp integration remains available when Google Calendar
-    credentials have not yet been configured. In that situation,
-    booking is temporarily disabled for the configured client.
+    The administration repository remains available even when Google
+    Calendar credentials are unavailable. In that situation booking
+    is disabled, but bots can still be viewed and configured.
     """
 
     try:
@@ -191,8 +255,12 @@ def create_production_app(
         calendar_service = None
 
     graph_client = WhatsAppGraphClient(
-        access_token=config.whatsapp.access_token,
-        phone_number_id=config.whatsapp.phone_number_id,
+        access_token=(
+            config.whatsapp.access_token
+        ),
+        phone_number_id=(
+            config.whatsapp.phone_number_id
+        ),
     )
 
     booking_repository = (
@@ -203,17 +271,27 @@ def create_production_app(
         else None
     )
 
+    instance_definition_repository = (
+        build_admin_repository(
+            config
+        )
+    )
+
     return create_app(
         config=config,
         calendar_service=calendar_service,
         graph_client=graph_client,
         booking_repository=booking_repository,
+        instance_definition_repository=(
+            instance_definition_repository
+        ),
     )
 
 
-def main() -> None:
+def main(
+) -> None:
     """
-    Run the FlowForge WhatsApp HTTP server.
+    Run the FlowForge HTTP server.
     """
 
     logging.basicConfig(
@@ -234,10 +312,13 @@ def main() -> None:
         "Starting FlowForge client: %s",
         config.client_id,
     )
-
     logger.info(
         "Booking database: %s",
         config.booking_database_path,
+    )
+    logger.info(
+        "Admin database: %s",
+        config.admin_database_path,
     )
 
     uvicorn.run(

@@ -28,34 +28,62 @@ class FlowForgeConfig:
     server: ServerConfig
     client_id: str = "tarot_alvin"
     booking_database_path: str | None = None
+    admin_database_path: str | None = None
 
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+    ) -> None:
         """
-        Resolve a client-specific default booking database path.
+        Resolve persistent database paths when omitted.
         """
 
-        configured_path = self.booking_database_path
+        booking_database_path = (
+            self.booking_database_path
+        )
 
         if (
-            configured_path is None
-            or not configured_path.strip()
+            booking_database_path is None
+            or not booking_database_path.strip()
         ):
-            configured_path = (
+            booking_database_path = (
                 f"data/{self.client_id}_bookings.sqlite3"
             )
         else:
-            configured_path = (
-                configured_path.strip()
+            booking_database_path = (
+                booking_database_path.strip()
+            )
+
+        admin_database_path = (
+            self.admin_database_path
+        )
+
+        if (
+            admin_database_path is None
+            or not admin_database_path.strip()
+        ):
+            admin_database_path = (
+                "data/flowforge_admin.sqlite3"
+            )
+        else:
+            admin_database_path = (
+                admin_database_path.strip()
             )
 
         object.__setattr__(
             self,
             "booking_database_path",
-            configured_path,
+            booking_database_path,
+        )
+        object.__setattr__(
+            self,
+            "admin_database_path",
+            admin_database_path,
         )
 
     @classmethod
-    def load(cls) -> "FlowForgeConfig":
+    def load(
+        cls,
+    ) -> "FlowForgeConfig":
         client_id = _environment_text(
             "FLOWFORGE_CLIENT_ID",
             "tarot_alvin",
@@ -64,20 +92,31 @@ class FlowForgeConfig:
         booking_database_path = os.getenv(
             "FLOWFORGE_BOOKING_DATABASE_PATH"
         )
+        admin_database_path = os.getenv(
+            "FLOWFORGE_ADMIN_DATABASE_PATH"
+        )
 
         return cls(
             whatsapp=WhatsAppConfig(
-                access_token=_required_environment_variable(
-                    "WHATSAPP_ACCESS_TOKEN"
+                access_token=(
+                    _required_environment_variable(
+                        "WHATSAPP_ACCESS_TOKEN"
+                    )
                 ),
-                phone_number_id=_required_environment_variable(
-                    "WHATSAPP_PHONE_NUMBER_ID"
+                phone_number_id=(
+                    _required_environment_variable(
+                        "WHATSAPP_PHONE_NUMBER_ID"
+                    )
                 ),
-                verify_token=_required_environment_variable(
-                    "WHATSAPP_VERIFY_TOKEN"
+                verify_token=(
+                    _required_environment_variable(
+                        "WHATSAPP_VERIFY_TOKEN"
+                    )
                 ),
-                app_secret=_required_environment_variable(
-                    "WHATSAPP_APP_SECRET"
+                app_secret=(
+                    _required_environment_variable(
+                        "WHATSAPP_APP_SECRET"
+                    )
                 ),
             ),
             server=ServerConfig(
@@ -97,13 +136,18 @@ class FlowForgeConfig:
             booking_database_path=(
                 booking_database_path
             ),
+            admin_database_path=(
+                admin_database_path
+            ),
         )
 
 
 def _required_environment_variable(
     name: str,
 ) -> str:
-    value = os.getenv(name)
+    value = os.getenv(
+        name
+    )
 
     if value is None or not value.strip():
         raise MissingConfigurationError(
@@ -117,13 +161,20 @@ def _environment_integer(
     name: str,
     default: int,
 ) -> int:
-    raw_value = os.getenv(name)
+    raw_value = os.getenv(
+        name
+    )
 
-    if raw_value is None or not raw_value.strip():
+    if (
+        raw_value is None
+        or not raw_value.strip()
+    ):
         return default
 
     try:
-        value = int(raw_value)
+        value = int(
+            raw_value
+        )
     except ValueError as exc:
         raise MissingConfigurationError(
             f"{name} must be a valid integer"
@@ -141,9 +192,14 @@ def _environment_text(
     name: str,
     default: str,
 ) -> str:
-    raw_value = os.getenv(name)
+    raw_value = os.getenv(
+        name
+    )
 
-    if raw_value is None or not raw_value.strip():
+    if (
+        raw_value is None
+        or not raw_value.strip()
+    ):
         return default
 
     return raw_value.strip()
