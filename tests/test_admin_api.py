@@ -2092,3 +2092,66 @@ def test_admin_preview_explains_that_booking_is_disabled(
     )
 
     repository.close()
+
+def test_admin_changes_stored_bot_lifecycle_status(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            metadata={
+                "admin_status": "draft",
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    response = client.post(
+        "/admin/clients/salon_centro/status",
+        data={
+            "status": "active",
+        },
+        follow_redirects=False,
+    )
+
+    updated_definition = repository.get(
+        "salon_centro"
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/admin/clients/salon_centro"
+    )
+    assert updated_definition is not None
+    assert updated_definition.metadata[
+        "admin_status"
+    ] == "active"
+
+    repository.close()
+def test_admin_client_detail_links_to_bot_status(
+) -> None:
+    client = build_test_client()
+
+    response = client.get(
+        "/admin/clients/hairdressing_demo"
+    )
+
+    assert response.status_code == 200
+    assert (
+        'href="/admin/clients/hairdressing_demo/status"'
+        in response.text
+    )
+    assert "Estado del bot" in response.text

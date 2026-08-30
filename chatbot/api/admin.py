@@ -1182,6 +1182,12 @@ def _render_client_detail(
     </a>
     <a
         class="primary-button"
+        href="/admin/clients/{escape(instance.id)}/status"
+    >
+        Estado del bot
+    </a>
+    <a
+        class="primary-button"
         href="/admin/clients/{escape(instance.id)}/edit"
     >
         Editar configuración

@@ -6,14 +6,25 @@ from chatbot.api.admin import (
     InstanceDefinitionRepositoryProtocol,
     build_admin_router,
 )
+from chatbot.api.admin_preview import (
+    build_admin_preview_router,
+)
+from chatbot.api.admin_status import (
+    build_admin_status_router,
+)
 from chatbot.api.whatsapp import (
     WhatsAppSignatureVerifierProtocol,
     create_whatsapp_router,
 )
 
-from chatbot.api.admin_preview import (
-    build_admin_preview_router,
-)
+
+class WhatsAppMessageHandlerProtocol(Protocol):
+    def handle(
+        self,
+        payload: dict,
+    ) -> object:
+        ...
+
 
 def _render_admin_page(
     *,
@@ -26,14 +37,6 @@ def _render_admin_page(
         title=title,
         content=content,
     )
-
-
-class WhatsAppMessageHandlerProtocol(Protocol):
-    def handle(
-        self,
-        payload: dict,
-    ) -> object:
-        ...
 
 
 def build_whatsapp_api(
@@ -74,6 +77,15 @@ def build_whatsapp_api(
 
     app.include_router(
         build_admin_preview_router(
+            instance_definition_repository=(
+                instance_definition_repository
+            ),
+            page_renderer=_render_admin_page,
+        )
+    )
+
+    app.include_router(
+        build_admin_status_router(
             instance_definition_repository=(
                 instance_definition_repository
             ),
