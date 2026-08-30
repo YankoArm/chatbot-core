@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from fastapi.testclient import TestClient
 
 from chatbot.api.whatsapp_app import (
@@ -81,6 +83,11 @@ def test_admin_client_page_shows_resolved_configuration(
     assert "hairdressing_demo" in response.text
     assert "booking" in response.text
     assert "whatsapp" in response.text
+    assert (
+        "/admin/clients/hairdressing_demo/schedule"
+        in response.text
+    )
+    assert "Horarios y reservas" in response.text
 
 
 def test_admin_page_includes_stored_client_definition(
@@ -773,5 +780,308 @@ def test_admin_deletes_service_after_confirmation(
     assert updated_definition.settings[
         "services"
     ] == []
+
+    repository.close()
+
+def test_admin_schedule_page_shows_booking_configuration(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            settings={
+                "booking": {
+                    "timezone": "Europe/Madrid",
+                    "business_hours": {
+                        "monday": [
+                            ["09:30", "13:30"],
+                            ["16:00", "20:00"],
+                        ],
+                        "tuesday": [],
+                    },
+                    "rules": {
+                        "appointment_duration_minutes": 30,
+                        "slot_interval_minutes": 30,
+                        "buffer_before_minutes": 0,
+                        "buffer_after_minutes": 10,
+                        "minimum_notice_hours": 2,
+                        "maximum_advance_days": 30,
+                        "allow_past_bookings": False,
+                    },
+                },
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    response = client.get(
+        "/admin/clients/salon_centro/schedule"
+    )
+
+    assert response.status_code == 200
+    assert "Horarios y reservas" in response.text
+    assert 'value="Europe/Madrid"' in response.text
+    assert 'name="monday_enabled"' in response.text
+    assert 'value="09:30"' in response.text
+    assert 'value="13:30"' in response.text
+    assert 'value="16:00"' in response.text
+    assert 'value="20:00"' in response.text
+    assert 'name="slot_interval_minutes"' in response.text
+    assert 'value="30"' in response.text
+    assert 'name="maximum_advance_days"' in response.text
+
+    repository.close()
+
+
+def test_admin_updates_booking_schedule_and_rules(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            settings={
+                "booking": {
+                    "timezone": "Europe/Madrid",
+                    "business_hours": {},
+                    "rules": {
+                        "appointment_duration_minutes": 30,
+                        "slot_interval_minutes": 30,
+                        "buffer_before_minutes": 0,
+                        "buffer_after_minutes": 0,
+                        "minimum_notice_hours": 2,
+                        "maximum_advance_days": 30,
+                        "allow_past_bookings": False,
+                    },
+                },
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    response = client.post(
+        "/admin/clients/salon_centro/schedule",
+        data={
+            "timezone": "Europe/Madrid",
+            "monday_enabled": "on",
+            "monday_start_1": "09:00",
+            "monday_end_1": "14:00",
+            "monday_start_2": "16:00",
+            "monday_end_2": "20:00",
+            "tuesday_enabled": "on",
+            "tuesday_start_1": "10:00",
+            "tuesday_end_1": "18:00",
+            "appointment_duration_minutes": "45",
+            "slot_interval_minutes": "15",
+            "buffer_before_minutes": "5",
+            "buffer_after_minutes": "10",
+            "minimum_notice_hours": "4",
+            "maximum_advance_days": "60",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/admin/clients/salon_centro"
+    )
+
+    stored_definition = repository.get(
+        "salon_centro"
+    )
+
+    assert stored_definition is not None
+
+    booking = stored_definition.settings[
+        "booking"
+    ]
+
+    assert booking["timezone"] == "Europe/Madrid"
+    assert booking["business_hours"]["monday"] == [
+        ["09:00", "14:00"],
+        ["16:00", "20:00"],
+    ]
+    assert booking["business_hours"]["tuesday"] == [
+        ["10:00", "18:00"],
+    ]
+    assert booking["business_hours"]["wednesday"] == []
+    assert booking["rules"] == {
+        "appointment_duration_minutes": 45,
+        "slot_interval_minutes": 15,
+        "buffer_before_minutes": 5,
+        "buffer_after_minutes": 10,
+        "minimum_notice_hours": 4,
+        "maximum_advance_days": 60,
+        "allow_past_bookings": False,
+    }
+
+    repository.close()
+
+@pytest.mark.parametrize(
+    (
+        "overrides",
+        "removed_fields",
+        "expected_message",
+    ),
+    [
+        (
+            {
+                "timezone": "Invalid/Timezone",
+            },
+            (),
+            "zona horaria indicada no es válida",
+        ),
+        (
+            {
+                "monday_start_1": "",
+                "monday_end_1": "",
+            },
+            (),
+            "Cada día abierto necesita",
+        ),
+        (
+            {
+                "monday_end_1": "08:00",
+            },
+            (),
+            "hora de cierre debe ser posterior",
+        ),
+        (
+            {
+                "monday_start_2": "13:00",
+                "monday_end_2": "16:00",
+            },
+            (),
+            "franjas de un mismo día no pueden solaparse",
+        ),
+        (
+            {
+                "slot_interval_minutes": "0",
+            },
+            (),
+            "intervalo entre horas debe ser igual o mayor que 1",
+        ),
+        (
+            {},
+            (
+                "monday_enabled",
+            ),
+            "Debes abrir al menos un día",
+        ),
+    ],
+)
+def test_admin_rejects_invalid_booking_schedule(
+    overrides: dict[str, str],
+    removed_fields: tuple[str, ...],
+    expected_message: str,
+) -> None:
+    original_settings = {
+        "booking": {
+            "timezone": "Europe/Madrid",
+            "business_hours": {
+                "monday": [
+                    ["09:00", "14:00"],
+                ],
+            },
+            "rules": {
+                "appointment_duration_minutes": 30,
+                "slot_interval_minutes": 30,
+                "buffer_before_minutes": 0,
+                "buffer_after_minutes": 0,
+                "minimum_notice_hours": 2,
+                "maximum_advance_days": 30,
+                "allow_past_bookings": False,
+            },
+        },
+    }
+
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            settings=original_settings,
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    submitted_data = {
+        "timezone": "Europe/Madrid",
+        "monday_enabled": "on",
+        "monday_start_1": "09:00",
+        "monday_end_1": "14:00",
+        "monday_start_2": "",
+        "monday_end_2": "",
+        "appointment_duration_minutes": "30",
+        "slot_interval_minutes": "30",
+        "buffer_before_minutes": "0",
+        "buffer_after_minutes": "0",
+        "minimum_notice_hours": "2",
+        "maximum_advance_days": "30",
+    }
+    submitted_data.update(
+        overrides
+    )
+
+    for field_name in removed_fields:
+        submitted_data.pop(
+            field_name,
+            None,
+        )
+
+    response = client.post(
+        "/admin/clients/salon_centro/schedule",
+        data=submitted_data,
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert expected_message in response.text
+
+    stored_definition = repository.get(
+        "salon_centro"
+    )
+
+    assert stored_definition is not None
+    assert stored_definition.settings == (
+        original_settings
+    )
 
     repository.close()
