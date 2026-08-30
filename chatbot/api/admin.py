@@ -1176,6 +1176,12 @@ def _render_client_detail(
     </p>
     <a
         class="primary-button"
+        href="/admin/clients/{escape(instance.id)}/preview"
+    >
+        Probar asistente
+    </a>
+    <a
+        class="primary-button"
         href="/admin/clients/{escape(instance.id)}/edit"
     >
         Editar configuración
@@ -1218,7 +1224,6 @@ def _render_client_detail(
         </div>
     </section>
     """
-
 
 def _render_definition(
     label: str,

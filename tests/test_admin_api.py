@@ -1994,3 +1994,101 @@ def test_admin_rejects_invalid_business_information(
     )
 
     repository.close()
+
+def test_admin_preview_uses_current_bot_messages_safely(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            settings={
+                "knowledge": {
+                    "greetings": {
+                        "welcome": {
+                            "es": (
+                                "¡Hola! Bienvenido a Salón Centro."
+                            ),
+                        },
+                    },
+                },
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    page_response = client.get(
+        "/admin/clients/salon_centro/preview"
+    )
+
+    response = client.post(
+        "/admin/clients/salon_centro/preview",
+        data={
+            "message": "hola",
+            "history": "[]",
+        },
+    )
+
+    assert page_response.status_code == 200
+    assert "Prueba el asistente" in page_response.text
+    assert "Las reservas están desactivadas" in page_response.text
+
+    assert response.status_code == 200
+    assert "hola" in response.text
+    assert (
+        "¡Hola! Bienvenido a Salón Centro."
+        in response.text
+    )
+
+    repository.close()
+
+def test_admin_preview_explains_that_booking_is_disabled(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    response = client.post(
+        "/admin/clients/salon_centro/preview",
+        data={
+            "message": "Quiero reservar una cita",
+            "history": "[]",
+        },
+    )
+
+    assert response.status_code == 200
+    assert (
+        "Las reservas no se pueden probar aquí"
+        in response.text
+    )
+
+    repository.close()

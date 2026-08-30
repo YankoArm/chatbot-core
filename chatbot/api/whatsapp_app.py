@@ -11,6 +11,22 @@ from chatbot.api.whatsapp import (
     create_whatsapp_router,
 )
 
+from chatbot.api.admin_preview import (
+    build_admin_preview_router,
+)
+
+def _render_admin_page(
+    *,
+    title: str,
+    content: str,
+) -> str:
+    from chatbot.api.admin import _render_page
+
+    return _render_page(
+        title=title,
+        content=content,
+    )
+
 
 class WhatsAppMessageHandlerProtocol(Protocol):
     def handle(
@@ -53,6 +69,15 @@ def build_whatsapp_api(
     app.include_router(
         build_admin_router(
             instance_definition_repository
+        )
+    )
+
+    app.include_router(
+        build_admin_preview_router(
+            instance_definition_repository=(
+                instance_definition_repository
+            ),
+            page_renderer=_render_admin_page,
         )
     )
 
