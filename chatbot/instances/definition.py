@@ -19,6 +19,10 @@ class InstanceDefinition:
     name: str
     template_id: str
 
+    whatsapp_phone_number_id: str | None = None
+
+    calendar_id: str | None = None
+
     default_language: str | None = None
     supported_languages: list[str] | None = None
 

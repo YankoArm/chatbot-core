@@ -15,10 +15,6 @@ class BookingRepository(ABC):
         self,
         booking: Booking,
     ) -> None:
-        """
-        Persist a completed booking.
-        """
-
         raise NotImplementedError
 
     @abstractmethod
@@ -26,10 +22,6 @@ class BookingRepository(ABC):
         self,
         booking: Booking,
     ) -> None:
-        """
-        Replace a previously persisted booking.
-        """
-
         raise NotImplementedError
 
     @abstractmethod
@@ -37,8 +29,13 @@ class BookingRepository(ABC):
         self,
         phone: str,
     ) -> tuple[Booking, ...]:
-        """
-        Return bookings associated with a phone number.
-        """
+        raise NotImplementedError
 
+    @abstractmethod
+    def find_by_client_and_phone(
+        self,
+        *,
+        client_id: str,
+        phone: str,
+    ) -> tuple[Booking, ...]:
         raise NotImplementedError

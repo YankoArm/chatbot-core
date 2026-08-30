@@ -25,6 +25,7 @@ class WhatsAppGraphSender:
         self,
         recipient: str,
         text: str,
+        phone_number_id: str | None = None,
     ) -> None:
         self._graph_client.send_text_message(
             to=recipient,

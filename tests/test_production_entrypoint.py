@@ -376,3 +376,43 @@ def test_runtime_client_availability_uses_stored_lifecycle_status(
     ) is False
 
     repository.close()
+def test_runtime_seed_registers_configured_client_for_tenant_routing(
+) -> None:
+    from run_flowforge import (
+        ensure_runtime_client_definition,
+    )
+
+    repository = SQLiteInstanceDefinitionRepository(
+        database_path=":memory:",
+    )
+    config = FlowForgeConfig(
+        whatsapp=WhatsAppConfig(
+            access_token="test-access-token",
+            phone_number_id="test-phone-number-id",
+            verify_token="test-verify-token",
+            app_secret="test-app-secret",
+        ),
+        server=ServerConfig(
+            host="127.0.0.1",
+            port=8000,
+        ),
+        client_id="hairdressing_demo",
+    )
+
+    definition = ensure_runtime_client_definition(
+        config=config,
+        instance_definition_repository=repository,
+    )
+
+    assert definition.id == "hairdressing_demo"
+    assert definition.whatsapp_phone_number_id == (
+        "test-phone-number-id"
+    )
+    assert definition.calendar_id == "primary"
+
+    stored_definition = repository.get(
+        "hairdressing_demo"
+    )
+    assert stored_definition == definition
+
+    repository.close()

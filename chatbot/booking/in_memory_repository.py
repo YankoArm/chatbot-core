@@ -9,8 +9,6 @@ class InMemoryBookingRepository(
 ):
     """
     Store completed bookings in memory.
-
-    Intended for tests, demos and local development.
     """
 
     def __init__(self) -> None:
@@ -28,10 +26,6 @@ class InMemoryBookingRepository(
         self,
         booking: Booking,
     ) -> None:
-        """
-        Replace an existing booking while preserving its position.
-        """
-
         for index, existing_booking in enumerate(
             self._bookings
         ):
@@ -49,10 +43,6 @@ class InMemoryBookingRepository(
     def list_all(
         self,
     ) -> list[Booking]:
-        """
-        Return a copy of all stored bookings.
-        """
-
         return list(
             self._bookings
         )
@@ -61,10 +51,6 @@ class InMemoryBookingRepository(
         self,
         phone: str,
     ) -> tuple[Booking, ...]:
-        """
-        Return bookings matching the normalized phone number.
-        """
-
         normalized_phone = phone.strip()
 
         return tuple(
@@ -73,14 +59,33 @@ class InMemoryBookingRepository(
             if booking.phone.strip() == normalized_phone
         )
 
+    def find_by_client_and_phone(
+        self,
+        *,
+        client_id: str,
+        phone: str,
+    ) -> tuple[Booking, ...]:
+        normalized_phone = phone.strip()
+
+        return tuple(
+            booking
+            for booking in self._bookings
+            if (
+                booking.client_id == client_id
+                and booking.phone.strip() == normalized_phone
+            )
+        )
+
     @staticmethod
     def _is_same_booking(
         existing_booking: Booking,
         updated_booking: Booking,
     ) -> bool:
-        """
-        Determine whether two records represent the same booking.
-        """
+        if (
+            existing_booking.client_id
+            != updated_booking.client_id
+        ):
+            return False
 
         if (
             existing_booking.calendar_booking_id is not None

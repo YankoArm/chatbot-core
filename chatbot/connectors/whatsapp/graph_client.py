@@ -154,3 +154,78 @@ class WhatsAppGraphClient:
         return WhatsAppMessageResponse(
             message_id=message_id,
         )
+from collections.abc import Callable
+from threading import RLock
+
+
+GraphClientFactory = Callable[
+    [str],
+    object,
+]
+
+
+class WhatsAppGraphClientProvider:
+    """
+    Build and retain one Graph client per WhatsApp phone number.
+
+    The access token remains server-side and is shared only through
+    the factory used to create per-number clients.
+    """
+
+    def __init__(
+        self,
+        *,
+        access_token: str,
+        graph_client_factory: (
+            GraphClientFactory | None
+        ) = None,
+    ) -> None:
+        self._access_token = access_token
+        self._graph_client_factory = (
+            graph_client_factory
+            or self._build_graph_client
+        )
+        self._graph_clients: dict[
+            str,
+            object,
+        ] = {}
+        self._lock = RLock()
+
+    def get_client(
+        self,
+        phone_number_id: str,
+    ) -> object:
+        normalized_phone_number_id = (
+            phone_number_id.strip()
+        )
+
+        if not normalized_phone_number_id:
+            raise ValueError(
+                "WhatsApp phone number id cannot be empty."
+            )
+
+        with self._lock:
+            cached_client = self._graph_clients.get(
+                normalized_phone_number_id
+            )
+
+            if cached_client is not None:
+                return cached_client
+
+            graph_client = self._graph_client_factory(
+                normalized_phone_number_id
+            )
+            self._graph_clients[
+                normalized_phone_number_id
+            ] = graph_client
+
+            return graph_client
+
+    def _build_graph_client(
+        self,
+        phone_number_id: str,
+    ) -> WhatsAppGraphClient:
+        return WhatsAppGraphClient(
+            access_token=self._access_token,
+            phone_number_id=phone_number_id,
+        )

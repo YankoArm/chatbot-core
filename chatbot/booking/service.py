@@ -42,9 +42,13 @@ class BookingService:
         self,
         repository: BookingRepository,
         calendar_service: CalendarService | None = None,
+
+        client_id: str = "legacy",
     ) -> None:
         self._repository = repository
         self._calendar_service = calendar_service
+
+        self._client_id = client_id
 
     def create_booking(
         self,
@@ -69,8 +73,9 @@ class BookingService:
         are excluded from operations on active appointments.
         """
 
-        bookings = self._repository.find_by_phone(
-            phone
+        bookings = self._repository.find_by_client_and_phone(
+            client_id=self._client_id,
+            phone=phone,
         )
 
         return tuple(
@@ -221,6 +226,7 @@ class BookingService:
             )
 
         booking = Booking(
+            client_id=self._client_id,
             name=self._require_value(
                 state.name,
                 "name",

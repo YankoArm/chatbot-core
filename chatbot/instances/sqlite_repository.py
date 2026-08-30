@@ -17,9 +17,6 @@ from chatbot.instances.definition import (
 class SQLiteInstanceDefinitionRepository:
     """
     Persist editable client definitions in SQLite.
-
-    Definitions are stored as structured JSON while identity fields
-    remain separately indexed for efficient administration queries.
     """
 
     def __init__(
@@ -43,9 +40,7 @@ class SQLiteInstanceDefinitionRepository:
             self._database_path,
             check_same_thread=False,
         )
-        self._connection.row_factory = (
-            sqlite3.Row
-        )
+        self._connection.row_factory = sqlite3.Row
 
         self._create_schema()
 
@@ -53,10 +48,6 @@ class SQLiteInstanceDefinitionRepository:
         self,
         definition: InstanceDefinition,
     ) -> None:
-        """
-        Insert a definition or replace its editable values.
-        """
-
         serialized_definition = (
             self._serialize_definition(
                 definition
@@ -71,12 +62,16 @@ class SQLiteInstanceDefinitionRepository:
                         id,
                         name,
                         template_id,
+                        whatsapp_phone_number_id,
                         definition_json
                     )
-                    VALUES (?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         name = excluded.name,
                         template_id = excluded.template_id,
+                        whatsapp_phone_number_id = (
+                            excluded.whatsapp_phone_number_id
+                        ),
                         definition_json = excluded.definition_json,
                         updated_at = CURRENT_TIMESTAMP
                     """,
@@ -84,6 +79,7 @@ class SQLiteInstanceDefinitionRepository:
                         definition.id,
                         definition.name,
                         definition.template_id,
+                        definition.whatsapp_phone_number_id,
                         serialized_definition,
                     ),
                 )
@@ -92,10 +88,6 @@ class SQLiteInstanceDefinitionRepository:
         self,
         client_id: str,
     ) -> InstanceDefinition | None:
-        """
-        Return a stored client definition by identifier.
-        """
-
         with self._lock:
             row = self._connection.execute(
                 """
@@ -115,13 +107,32 @@ class SQLiteInstanceDefinitionRepository:
             row["definition_json"]
         )
 
+    def get_by_whatsapp_phone_number_id(
+        self,
+        phone_number_id: str,
+    ) -> InstanceDefinition | None:
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT definition_json
+                FROM instance_definitions
+                WHERE whatsapp_phone_number_id = ?
+                """,
+                (
+                    phone_number_id,
+                ),
+            ).fetchone()
+
+        if row is None:
+            return None
+
+        return self._deserialize_definition(
+            row["definition_json"]
+        )
+
     def list_all(
         self,
     ) -> tuple[InstanceDefinition, ...]:
-        """
-        Return all definitions ordered by display name.
-        """
-
         with self._lock:
             rows = self._connection.execute(
                 """
@@ -141,20 +152,12 @@ class SQLiteInstanceDefinitionRepository:
     def close(
         self,
     ) -> None:
-        """
-        Close the SQLite connection.
-        """
-
         with self._lock:
             self._connection.close()
 
     def _create_schema(
         self,
     ) -> None:
-        """
-        Create the editable instance definition table.
-        """
-
         with self._lock:
             with self._connection:
                 self._connection.execute(
@@ -163,6 +166,7 @@ class SQLiteInstanceDefinitionRepository:
                         id TEXT PRIMARY KEY,
                         name TEXT NOT NULL,
                         template_id TEXT NOT NULL,
+                        whatsapp_phone_number_id TEXT,
                         definition_json TEXT NOT NULL,
                         created_at TEXT NOT NULL
                             DEFAULT CURRENT_TIMESTAMP,
@@ -171,6 +175,28 @@ class SQLiteInstanceDefinitionRepository:
                     )
                     """
                 )
+
+                columns = {
+                    row["name"]
+                    for row in self._connection.execute(
+                        """
+                        PRAGMA table_info(
+                            instance_definitions
+                        )
+                        """
+                    ).fetchall()
+                }
+
+                if (
+                    "whatsapp_phone_number_id"
+                    not in columns
+                ):
+                    self._connection.execute(
+                        """
+                        ALTER TABLE instance_definitions
+                        ADD COLUMN whatsapp_phone_number_id TEXT
+                        """
+                    )
 
                 self._connection.execute(
                     """
@@ -188,14 +214,21 @@ class SQLiteInstanceDefinitionRepository:
                     """
                 )
 
+                self._connection.execute(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS
+                        idx_instance_definitions_whatsapp_number
+                    ON instance_definitions (
+                        whatsapp_phone_number_id
+                    )
+                    WHERE whatsapp_phone_number_id IS NOT NULL
+                    """
+                )
+
     @staticmethod
     def _serialize_definition(
         definition: InstanceDefinition,
     ) -> str:
-        """
-        Convert a definition to stable UTF-8 JSON.
-        """
-
         return json.dumps(
             asdict(
                 definition
@@ -212,10 +245,6 @@ class SQLiteInstanceDefinitionRepository:
     def _deserialize_definition(
         serialized_definition: str,
     ) -> InstanceDefinition:
-        """
-        Rebuild a definition and its activation configuration.
-        """
-
         raw_data = json.loads(
             serialized_definition
         )

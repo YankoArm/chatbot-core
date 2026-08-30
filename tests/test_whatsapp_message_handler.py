@@ -159,6 +159,7 @@ class RecordingSender:
         self,
         recipient: str,
         text: str,
+        phone_number_id: str | None = None,
     ) -> None:
         self.recipient = recipient
         self.text = text
@@ -431,6 +432,7 @@ class FailOnceSender:
         self,
         recipient: str,
         text: str,
+        phone_number_id: str | None = None,
     ) -> None:
         self.call_count += 1
 
@@ -648,3 +650,65 @@ def test_whatsapp_adapter_rechecks_lifecycle_between_messages(
     )
 
     repository.close()
+def test_whatsapp_message_handler_passes_receiver_phone_number_to_sender(
+) -> None:
+    class RecordingTenantSender:
+        def __init__(
+            self,
+        ) -> None:
+            self.recipient: str | None = None
+            self.text: str | None = None
+            self.phone_number_id: str | None = None
+
+        def send_text(
+            self,
+            recipient: str,
+            text: str,
+            phone_number_id: str | None = None,
+        ) -> None:
+            self.recipient = recipient
+            self.text = text
+            self.phone_number_id = phone_number_id
+
+    sender = RecordingTenantSender()
+
+    handler = WhatsAppMessageHandler(
+        parser=WhatsAppPayloadParser(),
+        orchestrator=RecordingOrchestrator(),
+        sender=sender,
+    )
+
+    result = handler.handle(
+        {
+            "entry": [
+                {
+                    "changes": [
+                        {
+                            "value": {
+                                "metadata": {
+                                    "phone_number_id": (
+                                        "test-phone-number-id"
+                                    ),
+                                },
+                                "messages": [
+                                    {
+                                        "from": "34600000000",
+                                        "text": {
+                                            "body": "Hola",
+                                        },
+                                    }
+                                ],
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    )
+
+    assert result == "OK"
+    assert sender.recipient == "34600000000"
+    assert sender.text == "OK"
+    assert sender.phone_number_id == (
+        "test-phone-number-id"
+    )

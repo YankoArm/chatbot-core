@@ -11,6 +11,7 @@ class IncomingWhatsAppMessage:
     user_id: str
     text: str
     message_id: str | None = None
+    phone_number_id: str | None = None
 
 
 class WhatsAppParserProtocol(Protocol):
@@ -34,6 +35,7 @@ class WhatsAppSenderProtocol(Protocol):
         self,
         recipient: str,
         text: str,
+        phone_number_id: str | None = None,
     ) -> None:
         ...
 
@@ -96,6 +98,9 @@ class WhatsAppMessageHandler:
                 self._sender.send_text(
                     recipient=parsed_message.user_id,
                     text=str(response),
+                    phone_number_id=(
+                        parsed_message.phone_number_id
+                    ),
                 )
 
             if message_id is not None:

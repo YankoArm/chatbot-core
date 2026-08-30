@@ -28,6 +28,7 @@ class Booking:
     phone: str
     date: str
     time: str
+    client_id: str = "legacy"
 
     service_id: str | None = None
     service_name: str | None = None

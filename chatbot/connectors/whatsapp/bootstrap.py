@@ -57,3 +57,33 @@ def build_whatsapp_message_handler(
         orchestrator=orchestrator,
         sender=sender,
     )
+from chatbot.connectors.whatsapp.application_adapter import (
+    TenantFlowForgeWhatsAppAdapter,
+)
+from chatbot.connectors.whatsapp.tenant_graph_sender import (
+    TenantWhatsAppGraphSender,
+)
+
+
+def build_tenant_whatsapp_message_handler(
+    *,
+    tenant_router: object,
+    application_registry: object,
+    graph_client_provider: object,
+) -> WhatsAppMessageHandler:
+    parser = WhatsAppPayloadParser()
+
+    orchestrator = TenantFlowForgeWhatsAppAdapter(
+        tenant_router=tenant_router,
+        application_registry=application_registry,
+    )
+
+    sender = TenantWhatsAppGraphSender(
+        graph_client_provider=graph_client_provider,
+    )
+
+    return WhatsAppMessageHandler(
+        parser=parser,
+        orchestrator=orchestrator,
+        sender=sender,
+    )

@@ -222,3 +222,54 @@ def test_repository_updates_existing_definition(
     )
 
     repository.close()
+def test_repository_finds_definition_by_whatsapp_phone_number_id(
+) -> None:
+    repository = SQLiteInstanceDefinitionRepository(
+        database_path=":memory:",
+    )
+    definition = InstanceDefinition(
+        id="hairdressing_demo",
+        name="Salón Estilo",
+        template_id="hairdressing",
+        whatsapp_phone_number_id=(
+            "test-phone-number-id"
+        ),
+    )
+
+    repository.save(
+        definition
+    )
+
+    result = repository.get_by_whatsapp_phone_number_id(
+        "test-phone-number-id"
+    )
+
+    assert result == definition
+
+    repository.close()
+def test_repository_preserves_client_calendar_id(
+) -> None:
+    repository = SQLiteInstanceDefinitionRepository(
+        database_path=":memory:",
+    )
+    definition = InstanceDefinition(
+        id="salon_norte",
+        name="Salón Norte",
+        template_id="hairdressing",
+        calendar_id="salon-norte-calendar-id",
+    )
+
+    repository.save(
+        definition
+    )
+
+    result = repository.get(
+        "salon_norte"
+    )
+
+    assert result is not None
+    assert result.calendar_id == (
+        "salon-norte-calendar-id"
+    )
+
+    repository.close()

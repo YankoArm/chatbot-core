@@ -23,6 +23,7 @@ from chatbot.capabilities.booking import (
 )
 from chatbot.clients.registry import (
     build_client_instance,
+    build_client_definition,
 )
 from chatbot.connectors.whatsapp.bootstrap import (
     WhatsAppGraphClientProtocol,
@@ -42,6 +43,7 @@ from chatbot.instances import (
 )
 from run_google_calendar import (
     build_calendar_service,
+    DEFAULT_CALENDAR_ID,
 )
 
 
@@ -117,6 +119,47 @@ def is_runtime_client_active(
         )
         == "active"
     )
+
+def ensure_runtime_client_definition(
+    *,
+    config: FlowForgeConfig,
+    instance_definition_repository: (
+        SQLiteInstanceDefinitionRepository
+    ),
+):
+    """
+    Persist the configured legacy client for tenant routing.
+
+    Existing editable definitions always take precedence over
+    the built-in defaults.
+    """
+
+    existing_definition = (
+        instance_definition_repository.get(
+            config.client_id
+        )
+    )
+
+    if existing_definition is not None:
+        return existing_definition
+
+    built_in_definition = build_client_definition(
+        config.client_id
+    )
+
+    definition = replace(
+        built_in_definition,
+        whatsapp_phone_number_id=(
+            config.whatsapp.phone_number_id
+        ),
+        calendar_id=DEFAULT_CALENDAR_ID,
+    )
+
+    instance_definition_repository.save(
+        definition
+    )
+
+    return definition
 
 def create_app(
     *,

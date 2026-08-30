@@ -63,6 +63,23 @@ class FakeBookingRepository(BookingRepository):
         return ()
 
 
+    def find_by_client_and_phone(
+        self,
+        *,
+        client_id: str,
+        phone: str,
+    ) -> tuple[Booking, ...]:
+        if (
+            self.saved_booking is not None
+            and self.saved_booking.client_id == client_id
+            and self.saved_booking.phone == phone
+        ):
+            return (
+                self.saved_booking,
+            )
+
+        return ()
+
 def make_complete_state() -> BookingState:
     state = BookingState()
 
@@ -801,7 +818,7 @@ def test_booking_service_finds_only_active_bookings_by_phone(
         status=BookingStatus.CANCELLED,
     )
 
-    repository.find_by_phone.return_value = (
+    repository.find_by_client_and_phone.return_value = (
         confirmed_booking,
         cancelled_booking,
     )
@@ -817,8 +834,9 @@ def test_booking_service_finds_only_active_bookings_by_phone(
     assert result == (
         confirmed_booking,
     )
-    repository.find_by_phone.assert_called_once_with(
-        "+34600123123"
+    repository.find_by_client_and_phone.assert_called_once_with(
+        client_id="legacy",
+        phone="+34600123123",
     )
 
 
@@ -828,7 +846,7 @@ def test_booking_service_returns_empty_when_phone_has_no_active_bookings(
         spec=BookingRepository
     )
 
-    repository.find_by_phone.return_value = (
+    repository.find_by_client_and_phone.return_value = (
         Booking(
             name="Yanko",
             phone="+34600123123",
@@ -1017,3 +1035,25 @@ def test_booking_service_translates_unavailable_reschedule_slot(
     assert repository.updated_booking is None
     assert booking.date == "30/08/2026"
     assert booking.time == "16:30"
+def test_booking_service_scopes_phone_lookup_to_client(
+) -> None:
+    repository = Mock(
+        spec=BookingRepository
+    )
+    repository.find_by_client_and_phone.return_value = ()
+
+    service = BookingService(
+        repository=repository,
+        client_id="salon_norte",
+    )
+
+    result = service.find_active_bookings_by_phone(
+        "+34600123123"
+    )
+
+    assert result == ()
+
+    repository.find_by_client_and_phone.assert_called_once_with(
+        client_id="salon_norte",
+        phone="+34600123123",
+    )
