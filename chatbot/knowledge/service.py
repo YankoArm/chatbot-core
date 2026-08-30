@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -10,18 +11,31 @@ class KnowledgeService:
     """
     Provide high-level access to loaded FlowForge knowledge.
 
-    Capabilities should use this service instead of reading files or
-    interacting directly with providers.
+    File-based knowledge can be extended or overridden with
+    instance-specific knowledge without modifying the loader cache.
     """
 
     def __init__(
         self,
         loader: KnowledgeLoader,
         knowledge_path: str | Path,
+        *,
+        knowledge_overrides: (
+            dict[str, Any] | None
+        ) = None,
+        allow_missing_path: bool = False,
     ) -> None:
         self._loader = loader
         self._knowledge_path = knowledge_path
-        self._knowledge: dict[str, Any] | None = None
+        self._knowledge_overrides = deepcopy(
+            knowledge_overrides or {}
+        )
+        self._allow_missing_path = (
+            allow_missing_path
+        )
+        self._knowledge: (
+            dict[str, Any] | None
+        ) = None
 
     def load(
         self,
@@ -29,12 +43,23 @@ class KnowledgeService:
         force_reload: bool = False,
     ) -> dict[str, Any]:
         """
-        Load and retain the knowledge associated with this service.
+        Load base knowledge and apply instance-specific overrides.
         """
 
-        self._knowledge = self._loader.load(
-            self._knowledge_path,
-            force_reload=force_reload,
+        try:
+            base_knowledge = self._loader.load(
+                self._knowledge_path,
+                force_reload=force_reload,
+            )
+        except FileNotFoundError:
+            if not self._allow_missing_path:
+                raise
+
+            base_knowledge = {}
+
+        self._knowledge = self._deep_merge(
+            base_knowledge,
+            self._knowledge_overrides,
         )
 
         return self._knowledge
@@ -46,10 +71,6 @@ class KnowledgeService:
     ) -> Any:
         """
         Return one complete knowledge section.
-
-        Example:
-
-            service.get_section("faq")
         """
 
         knowledge = self._ensure_loaded()
@@ -67,10 +88,6 @@ class KnowledgeService:
     ) -> Any:
         """
         Return one value from a dictionary-based section.
-
-        Example:
-
-            service.get("company", "name")
         """
 
         section_data = self.get_section(
@@ -78,7 +95,10 @@ class KnowledgeService:
             {},
         )
 
-        if not isinstance(section_data, dict):
+        if not isinstance(
+            section_data,
+            dict,
+        ):
             return default
 
         return section_data.get(
@@ -102,7 +122,7 @@ class KnowledgeService:
         self,
     ) -> dict[str, Any]:
         """
-        Reload knowledge from the underlying provider.
+        Reload base knowledge and reapply overrides.
         """
 
         return self.load(
@@ -113,7 +133,7 @@ class KnowledgeService:
         self,
     ) -> None:
         """
-        Clear cached knowledge for this service.
+        Clear cached base and merged knowledge.
         """
 
         self._loader.clear(
@@ -133,3 +153,41 @@ class KnowledgeService:
             return self.load()
 
         return self._knowledge
+
+    @classmethod
+    def _deep_merge(
+        cls,
+        base: dict[str, Any],
+        overrides: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Merge nested dictionaries without mutating either source.
+        """
+
+        merged = deepcopy(
+            base
+        )
+
+        for key, override_value in overrides.items():
+            base_value = merged.get(
+                key
+            )
+
+            if (
+                isinstance(base_value, dict)
+                and isinstance(
+                    override_value,
+                    dict,
+                )
+            ):
+                merged[key] = cls._deep_merge(
+                    base_value,
+                    override_value,
+                )
+                continue
+
+            merged[key] = deepcopy(
+                override_value
+            )
+
+        return merged

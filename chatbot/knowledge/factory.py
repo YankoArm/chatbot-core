@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from chatbot.instances import Instance
 from chatbot.knowledge.json_provider import (
@@ -14,9 +15,8 @@ class KnowledgeServiceFactory:
     """
     Build knowledge services for FlowForge instances.
 
-    An instance may provide an explicit knowledge path. When no explicit path
-    is configured, the conventional ``knowledge/<instance_id>`` directory is
-    used automatically.
+    Instance knowledge stored in settings is merged over optional
+    file-based knowledge.
     """
 
     def __init__(
@@ -39,17 +39,26 @@ class KnowledgeServiceFactory:
     ) -> KnowledgeService:
         """
         Build the KnowledgeService associated with an instance.
-
-        Explicit instance knowledge paths take precedence over the default
-        directory convention.
         """
 
         knowledge_path = self.resolve_path(
             instance
         )
+        knowledge_overrides = (
+            self._get_instance_knowledge(
+                instance
+            )
+        )
 
-        return self.build_from_path(
-            knowledge_path
+        return KnowledgeService(
+            loader=self._loader,
+            knowledge_path=knowledge_path,
+            knowledge_overrides=(
+                knowledge_overrides
+            ),
+            allow_missing_path=bool(
+                knowledge_overrides
+            ),
         )
 
     def build_from_path(
@@ -57,7 +66,7 @@ class KnowledgeServiceFactory:
         knowledge_path: str | Path,
     ) -> KnowledgeService:
         """
-        Build a KnowledgeService from an explicit knowledge path.
+        Build a file-only service from an explicit path.
         """
 
         normalized_path = Path(
@@ -113,3 +122,27 @@ class KnowledgeServiceFactory:
             self._knowledge_root
             / normalized_instance_id
         )
+
+    @staticmethod
+    def _get_instance_knowledge(
+        instance: Instance,
+    ) -> dict[str, Any]:
+        """
+        Return validated knowledge stored in instance settings.
+        """
+
+        knowledge = instance.settings.get(
+            "knowledge",
+            {},
+        )
+
+        if not isinstance(
+            knowledge,
+            dict,
+        ):
+            raise ValueError(
+                "Instance knowledge settings "
+                "must be a dictionary."
+            )
+
+        return knowledge

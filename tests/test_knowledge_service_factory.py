@@ -290,3 +290,138 @@ def test_factory_resolves_explicit_instance_path(
     )
 
     assert result == explicit_path
+
+def test_factory_merges_instance_knowledge_over_json_files(
+    tmp_path: Path,
+) -> None:
+    instance_path = (
+        tmp_path / "salon_centro"
+    )
+    instance_path.mkdir()
+
+    (
+        instance_path / "faq.json"
+    ).write_text(
+        """
+        {
+          "opening_hours": {
+            "keywords": ["horario"],
+            "answers": {
+              "es": "Horario original",
+              "en": "Original opening hours"
+            }
+          },
+          "location": {
+            "keywords": ["direccion"],
+            "answers": {
+              "es": "Dirección original"
+            }
+          }
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    instance = Instance(
+        id="salon_centro",
+        name="Salón Centro",
+        capabilities=[
+            "faq",
+        ],
+        settings={
+            "knowledge": {
+                "faq": {
+                    "opening_hours": {
+                        "answers": {
+                            "es": "Nuevo horario",
+                        },
+                    },
+                    "payment_methods": {
+                        "keywords": [
+                            "formas de pago",
+                        ],
+                        "answers": {
+                            "es": "Aceptamos tarjeta.",
+                        },
+                    },
+                },
+            },
+        },
+    )
+
+    factory = KnowledgeServiceFactory(
+        knowledge_root=tmp_path,
+    )
+
+    service = factory.build(
+        instance
+    )
+    faq = service.get_section(
+        "faq"
+    )
+
+    assert faq["opening_hours"]["keywords"] == [
+        "horario",
+    ]
+    assert faq["opening_hours"]["answers"] == {
+        "es": "Nuevo horario",
+        "en": "Original opening hours",
+    }
+    assert faq["location"]["answers"]["es"] == (
+        "Dirección original"
+    )
+    assert faq["payment_methods"]["answers"]["es"] == (
+        "Aceptamos tarjeta."
+    )
+
+
+def test_factory_builds_inline_only_knowledge_without_directory(
+    tmp_path: Path,
+) -> None:
+    instance = Instance(
+        id="salon_nuevo",
+        name="Salón Nuevo",
+        capabilities=[
+            "faq",
+        ],
+        settings={
+            "knowledge": {
+                "company": {
+                    "name": "Salón Nuevo",
+                    "phone": "+34600123123",
+                },
+                "faq": {
+                    "location": {
+                        "keywords": [
+                            "donde estais",
+                        ],
+                        "answers": {
+                            "es": "Estamos en Madrid.",
+                        },
+                    },
+                },
+            },
+        },
+    )
+
+    factory = KnowledgeServiceFactory(
+        knowledge_root=tmp_path,
+    )
+
+    service = factory.build(
+        instance
+    )
+
+    assert service.get(
+        "company",
+        "name",
+    ) == "Salón Nuevo"
+    assert service.get(
+        "company",
+        "phone",
+    ) == "+34600123123"
+    assert service.get_section(
+        "faq"
+    )["location"]["answers"]["es"] == (
+        "Estamos en Madrid."
+    )

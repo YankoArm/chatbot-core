@@ -88,6 +88,11 @@ def test_admin_client_page_shows_resolved_configuration(
         in response.text
     )
     assert "Horarios y reservas" in response.text
+    assert (
+        "/admin/clients/hairdressing_demo/faq"
+        in response.text
+    )
+    assert "Preguntas frecuentes" in response.text
 
 
 def test_admin_page_includes_stored_client_definition(
@@ -1082,6 +1087,618 @@ def test_admin_rejects_invalid_booking_schedule(
     assert stored_definition is not None
     assert stored_definition.settings == (
         original_settings
+    )
+
+    repository.close()
+
+def test_admin_faq_page_lists_configured_entries(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            settings={
+                "knowledge": {
+                    "faq": {
+                        "location": {
+                            "question": "¿Dónde estamos?",
+                            "keywords": [
+                                "donde estais",
+                                "direccion",
+                            ],
+                            "answers": {
+                                "es": (
+                                    "Estamos en Calle Mayor, 10."
+                                ),
+                                "en": (
+                                    "We are at 10 Calle Mayor."
+                                ),
+                            },
+                        },
+                    },
+                },
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    response = client.get(
+        "/admin/clients/salon_centro/faq"
+    )
+
+    assert response.status_code == 200
+    assert "Preguntas frecuentes" in response.text
+    assert "¿Dónde estamos?" in response.text
+    assert "Estamos en Calle Mayor, 10." in response.text
+    assert "donde estais" in response.text
+    assert (
+        "/admin/clients/salon_centro/faq/new"
+        in response.text
+    )
+    assert (
+        "/admin/clients/salon_centro/faq/location/edit"
+        in response.text
+    )
+    assert (
+        "/admin/clients/salon_centro/faq/location/delete"
+        in response.text
+    )
+
+    repository.close()
+
+
+def test_admin_adds_faq_entry_to_client_definition(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            settings={
+                "knowledge": {
+                    "company": {
+                        "name": "Salón Centro",
+                    },
+                    "faq": {},
+                },
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    form_response = client.get(
+        "/admin/clients/salon_centro/faq/new"
+    )
+
+    assert form_response.status_code == 200
+    assert "Añadir pregunta frecuente" in (
+        form_response.text
+    )
+
+    response = client.post(
+        "/admin/clients/salon_centro/faq",
+        data={
+            "faq_id": "payment_methods",
+            "question": "¿Cómo puedo pagar?",
+            "keywords": (
+                "formas de pago\n"
+                "pagar con tarjeta\n"
+                "aceptais bizum"
+            ),
+            "answer_es": (
+                "Aceptamos tarjeta, efectivo y Bizum."
+            ),
+            "answer_en": (
+                "We accept card, cash and Bizum."
+            ),
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/admin/clients/salon_centro/faq"
+    )
+
+    stored_definition = repository.get(
+        "salon_centro"
+    )
+
+    assert stored_definition is not None
+
+    knowledge = stored_definition.settings[
+        "knowledge"
+    ]
+
+    assert knowledge["company"] == {
+        "name": "Salón Centro",
+    }
+    assert knowledge["faq"]["payment_methods"] == {
+        "question": "¿Cómo puedo pagar?",
+        "keywords": [
+            "formas de pago",
+            "pagar con tarjeta",
+            "aceptais bizum",
+        ],
+        "answers": {
+            "es": (
+                "Aceptamos tarjeta, efectivo y Bizum."
+            ),
+            "en": (
+                "We accept card, cash and Bizum."
+            ),
+        },
+    }
+
+    repository.close()
+
+def test_admin_edits_existing_faq_entry(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            settings={
+                "knowledge": {
+                    "company": {
+                        "name": "Salón Centro",
+                    },
+                    "faq": {
+                        "location": {
+                            "question": "¿Dónde estamos?",
+                            "keywords": [
+                                "direccion",
+                            ],
+                            "answers": {
+                                "es": "Dirección anterior.",
+                            },
+                        },
+                        "payment_methods": {
+                            "question": "¿Cómo puedo pagar?",
+                            "keywords": [
+                                "formas de pago",
+                            ],
+                            "answers": {
+                                "es": "Aceptamos tarjeta.",
+                            },
+                        },
+                    },
+                },
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    form_response = client.get(
+        "/admin/clients/salon_centro/faq/location/edit"
+    )
+
+    assert form_response.status_code == 200
+    assert "Editar pregunta frecuente" in (
+        form_response.text
+    )
+    assert "¿Dónde estamos?" in form_response.text
+    assert "Dirección anterior." in form_response.text
+
+    response = client.post(
+        "/admin/clients/salon_centro/faq/location",
+        data={
+            "question": "¿Dónde está el salón?",
+            "keywords": (
+                "donde estais\n"
+                "direccion\n"
+                "como llegar"
+            ),
+            "answer_es": (
+                "Estamos en Calle Mayor, 10."
+            ),
+            "answer_en": (
+                "We are at 10 Calle Mayor."
+            ),
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/admin/clients/salon_centro/faq"
+    )
+
+    stored_definition = repository.get(
+        "salon_centro"
+    )
+
+    assert stored_definition is not None
+
+    knowledge = stored_definition.settings[
+        "knowledge"
+    ]
+
+    assert knowledge["company"] == {
+        "name": "Salón Centro",
+    }
+    assert knowledge["faq"]["location"] == {
+        "question": "¿Dónde está el salón?",
+        "keywords": [
+            "donde estais",
+            "direccion",
+            "como llegar",
+        ],
+        "answers": {
+            "es": "Estamos en Calle Mayor, 10.",
+            "en": "We are at 10 Calle Mayor.",
+        },
+    }
+    assert "payment_methods" in knowledge["faq"]
+
+    repository.close()
+
+
+def test_admin_deletes_faq_entry_after_confirmation(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            settings={
+                "knowledge": {
+                    "company": {
+                        "name": "Salón Centro",
+                    },
+                    "faq": {
+                        "location": {
+                            "question": "¿Dónde estamos?",
+                            "keywords": [
+                                "direccion",
+                            ],
+                            "answers": {
+                                "es": "Estamos en Madrid.",
+                            },
+                        },
+                        "payment_methods": {
+                            "question": "¿Cómo puedo pagar?",
+                            "keywords": [
+                                "formas de pago",
+                            ],
+                            "answers": {
+                                "es": "Aceptamos tarjeta.",
+                            },
+                        },
+                    },
+                },
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    confirmation_response = client.get(
+        "/admin/clients/salon_centro/faq/location/delete"
+    )
+
+    assert confirmation_response.status_code == 200
+    assert "Eliminar pregunta frecuente" in (
+        confirmation_response.text
+    )
+    assert "¿Dónde estamos?" in (
+        confirmation_response.text
+    )
+
+    response = client.post(
+        "/admin/clients/salon_centro/faq/location/delete",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/admin/clients/salon_centro/faq"
+    )
+
+    stored_definition = repository.get(
+        "salon_centro"
+    )
+
+    assert stored_definition is not None
+
+    knowledge = stored_definition.settings[
+        "knowledge"
+    ]
+
+    assert "location" not in knowledge["faq"]
+    assert "payment_methods" in knowledge["faq"]
+    assert knowledge["company"] == {
+        "name": "Salón Centro",
+    }
+
+    repository.close()
+
+@pytest.mark.parametrize(
+    (
+        "overrides",
+        "expected_message",
+    ),
+    [
+        (
+            {
+                "faq_id": "Payment Methods",
+            },
+            "identificador debe comenzar por una letra",
+        ),
+        (
+            {
+                "faq_id": "location",
+            },
+            "Ya existe una pregunta con ese identificador",
+        ),
+        (
+            {
+                "question": "",
+            },
+            "La pregunta es obligatoria",
+        ),
+        (
+            {
+                "keywords": "   ",
+            },
+            "Añade al menos una palabra",
+        ),
+        (
+            {
+                "answer_es": "",
+            },
+            "respuesta en español es obligatoria",
+        ),
+    ],
+)
+def test_admin_rejects_invalid_faq_entry(
+    overrides: dict[str, str],
+    expected_message: str,
+) -> None:
+    original_settings = {
+        "knowledge": {
+            "company": {
+                "name": "Salón Centro",
+            },
+            "faq": {
+                "location": {
+                    "question": "¿Dónde estamos?",
+                    "keywords": [
+                        "direccion",
+                    ],
+                    "answers": {
+                        "es": "Estamos en Madrid.",
+                    },
+                },
+            },
+        },
+    }
+
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            settings=original_settings,
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    submitted_data = {
+        "faq_id": "payment_methods",
+        "question": "¿Cómo puedo pagar?",
+        "keywords": (
+            "formas de pago\n"
+            "pagar con tarjeta"
+        ),
+        "answer_es": "Aceptamos tarjeta.",
+        "answer_en": "We accept cards.",
+    }
+    submitted_data.update(
+        overrides
+    )
+
+    response = client.post(
+        "/admin/clients/salon_centro/faq",
+        data=submitted_data,
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert expected_message in response.text
+
+    stored_definition = repository.get(
+        "salon_centro"
+    )
+
+    assert stored_definition is not None
+    assert stored_definition.settings == (
+        original_settings
+    )
+
+    repository.close()
+
+def test_admin_faq_page_includes_and_edits_file_based_entry(
+    tmp_path,
+) -> None:
+    (
+        tmp_path / "faq.json"
+    ).write_text(
+        """
+        {
+          "location": {
+            "keywords": [
+              "donde estais",
+              "direccion"
+            ],
+            "answers": {
+              "es": "Dirección original.",
+              "en": "Original address."
+            }
+          }
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            knowledge_path=str(
+                tmp_path
+            ),
+            settings={},
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    list_response = client.get(
+        "/admin/clients/salon_centro/faq"
+    )
+
+    assert list_response.status_code == 200
+    assert "location" in list_response.text
+    assert "Dirección original." in list_response.text
+    assert (
+        "/admin/clients/salon_centro/faq/location/edit"
+        in list_response.text
+    )
+
+    form_response = client.get(
+        "/admin/clients/salon_centro/faq/location/edit"
+    )
+
+    assert form_response.status_code == 200
+    assert "Dirección original." in form_response.text
+
+    response = client.post(
+        "/admin/clients/salon_centro/faq/location",
+        data={
+            "question": "¿Dónde está el salón?",
+            "keywords": (
+                "donde estais\n"
+                "direccion\n"
+                "como llegar"
+            ),
+            "answer_es": "Estamos en Calle Mayor, 10.",
+            "answer_en": "We are at 10 Calle Mayor.",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+
+    stored_definition = repository.get(
+        "salon_centro"
+    )
+
+    assert stored_definition is not None
+
+    stored_entry = stored_definition.settings[
+        "knowledge"
+    ]["faq"]["location"]
+
+    assert stored_entry["answers"]["es"] == (
+        "Estamos en Calle Mayor, 10."
+    )
+
+    delete_response = client.post(
+        "/admin/clients/salon_centro/faq/location/delete",
+        follow_redirects=False,
+    )
+
+    assert delete_response.status_code == 303
+
+    deleted_definition = repository.get(
+        "salon_centro"
+    )
+
+    assert deleted_definition is not None
+    assert deleted_definition.settings[
+        "knowledge"
+    ]["faq"]["location"] is None
+
+    updated_list_response = client.get(
+        "/admin/clients/salon_centro/faq"
+    )
+
+    assert "Dirección original." not in (
+        updated_list_response.text
     )
 
     repository.close()
