@@ -1,15 +1,22 @@
 from __future__ import annotations
 
+from copy import deepcopy
+from dataclasses import replace
 from html import escape
 import re
 from urllib.parse import parse_qs
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from typing import Protocol
 
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from chatbot.api.admin_services import (
+    build_admin_services_router,
+)
 from chatbot.clients.registry import (
     UnknownClientError,
+    build_client_definition,
     build_client_instance,
     build_instance_from_definition,
     list_template_ids,
@@ -329,6 +336,22 @@ h1 {
     margin: 4px 0 0;
 }
 
+.danger-button {
+    display: inline-flex;
+    padding: 12px 18px;
+    border: 1px solid rgba(248, 113, 113, 0.48);
+    border-radius: 11px;
+    color: #fecaca;
+    background: rgba(127, 29, 29, 0.28);
+    font: inherit;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.danger-button:hover {
+    color: #ffffff;
+    background: rgba(185, 28, 28, 0.62);
+}
 .form-error {
     margin-bottom: 20px;
     padding: 13px 15px;
@@ -398,6 +421,25 @@ def build_admin_router(
             client_id
         )
 
+    def load_editable_definition(
+        client_id: str,
+    ) -> InstanceDefinition | None:
+        if instance_definition_repository is not None:
+            stored_definition = (
+                instance_definition_repository.get(
+                    client_id
+                )
+            )
+
+            if stored_definition is not None:
+                return stored_definition
+
+        try:
+            return build_client_definition(
+                client_id
+            )
+        except UnknownClientError:
+            return None
     def render_creation_form(
         *,
         error: str | None = None,
@@ -491,6 +533,130 @@ def build_admin_router(
         </section>
         """
 
+    def render_edit_form(
+        *,
+        definition: InstanceDefinition,
+        supported_languages: list[str],
+        error: str | None = None,
+        name: str | None = None,
+        default_language: str | None = None,
+        timezone: str | None = None,
+    ) -> str:
+        visible_name = (
+            definition.name
+            if name is None
+            else name
+        )
+        visible_language = (
+            definition.default_language
+            or supported_languages[0]
+            if default_language is None
+            else default_language
+        )
+
+        booking_settings = definition.settings.get(
+            "booking",
+            {},
+        )
+        stored_timezone = booking_settings.get(
+            "timezone",
+            "Europe/Madrid",
+        )
+        visible_timezone = (
+            stored_timezone
+            if timezone is None
+            else timezone
+        )
+
+        error_html = ""
+
+        if error is not None:
+            error_html = (
+                '<div class="form-error">'
+                f"{escape(error)}"
+                "</div>"
+            )
+
+        language_options = "".join(
+            (
+                f'<option value="{escape(language)}"'
+                f'{" selected" if language == visible_language else ""}'
+                ">"
+                f"{escape(language.upper())}"
+                "</option>"
+            )
+            for language in supported_languages
+        )
+
+        return f"""
+        <a
+            class="back"
+            href="/admin/clients/{escape(definition.id)}"
+        >
+            ← Volver al bot
+        </a>
+        <p class="eyebrow">Configuración básica</p>
+        <h1>Editar bot</h1>
+        <p class="intro">
+            Actualiza la identidad, el idioma principal
+            y la zona horaria del asistente.
+        </p>
+        <section class="panel">
+            {error_html}
+            <form
+                class="admin-form"
+                method="post"
+                action="/admin/clients/{escape(definition.id)}"
+            >
+                <label>
+                    <span>Identificador</span>
+                    <input
+                        value="{escape(definition.id)}"
+                        disabled
+                    >
+                    <small>
+                        El identificador no puede modificarse.
+                    </small>
+                </label>
+
+                <label>
+                    <span>Nombre comercial</span>
+                    <input
+                        name="name"
+                        value="{escape(visible_name)}"
+                        required
+                    >
+                </label>
+
+                <label>
+                    <span>Idioma principal</span>
+                    <select
+                        name="default_language"
+                        required
+                    >
+                        {language_options}
+                    </select>
+                </label>
+
+                <label>
+                    <span>Zona horaria</span>
+                    <input
+                        name="timezone"
+                        value="{escape(visible_timezone)}"
+                        required
+                        placeholder="Europe/Madrid"
+                    >
+                </label>
+
+                <button
+                    class="primary-button"
+                    type="submit"
+                >
+                    Guardar cambios
+                </button>
+            </form>
+        </section>
+        """
     @router.get(
         "/admin",
         response_class=HTMLResponse,
@@ -662,6 +828,204 @@ def build_admin_router(
         )
 
     @router.get(
+        "/admin/clients/{client_id}/edit",
+        response_class=HTMLResponse,
+    )
+    def admin_edit_client(
+        client_id: str,
+    ) -> Response:
+        if instance_definition_repository is None:
+            return HTMLResponse(
+                content=_render_page(
+                    title="Edición no disponible",
+                    content="<h1>Edición no disponible</h1>",
+                ),
+                status_code=503,
+            )
+
+        definition = load_editable_definition(
+            client_id
+        )
+
+        if definition is None:
+            return HTMLResponse(
+                content=_render_page(
+                    title="Bot no encontrado",
+                    content="<h1>Bot no encontrado</h1>",
+                ),
+                status_code=404,
+            )
+
+        resolved_instance = (
+            build_instance_from_definition(
+                definition
+            )
+        )
+
+        return HTMLResponse(
+            content=_render_page(
+                title=f"Editar {definition.name}",
+                content=render_edit_form(
+                    definition=definition,
+                    supported_languages=(
+                        resolved_instance.supported_languages
+                    ),
+                ),
+            )
+        )
+
+    @router.post(
+        "/admin/clients/{client_id}",
+    )
+    async def admin_update_client(
+        client_id: str,
+        request: Request,
+    ) -> Response:
+        if instance_definition_repository is None:
+            return HTMLResponse(
+                content=_render_page(
+                    title="Edición no disponible",
+                    content="<h1>Edición no disponible</h1>",
+                ),
+                status_code=503,
+            )
+
+        definition = load_editable_definition(
+            client_id
+        )
+
+        if definition is None:
+            return HTMLResponse(
+                content=_render_page(
+                    title="Bot no encontrado",
+                    content="<h1>Bot no encontrado</h1>",
+                ),
+                status_code=404,
+            )
+
+        resolved_instance = (
+            build_instance_from_definition(
+                definition
+            )
+        )
+        supported_languages = (
+            resolved_instance.supported_languages
+        )
+
+        raw_body = (
+            await request.body()
+        ).decode(
+            "utf-8"
+        )
+        form_data = parse_qs(
+            raw_body,
+            keep_blank_values=True,
+        )
+
+        name = (
+            form_data.get(
+                "name",
+                [""],
+            )[0].strip()
+        )
+        default_language = (
+            form_data.get(
+                "default_language",
+                [""],
+            )[0].strip()
+        )
+        timezone = (
+            form_data.get(
+                "timezone",
+                [""],
+            )[0].strip()
+        )
+
+        error: str | None = None
+
+        if not name:
+            error = (
+                "El nombre comercial es obligatorio."
+            )
+        elif (
+            default_language
+            not in supported_languages
+        ):
+            error = (
+                "El idioma principal no es válido "
+                "para esta plantilla."
+            )
+        else:
+            try:
+                ZoneInfo(
+                    timezone
+                )
+            except (
+                ZoneInfoNotFoundError,
+                ValueError,
+            ):
+                error = (
+                    "La zona horaria no es válida."
+                )
+
+        if error is not None:
+            return HTMLResponse(
+                content=_render_page(
+                    title=f"Editar {definition.name}",
+                    content=render_edit_form(
+                        definition=definition,
+                        supported_languages=(
+                            supported_languages
+                        ),
+                        error=error,
+                        name=name,
+                        default_language=(
+                            default_language
+                        ),
+                        timezone=timezone,
+                    ),
+                ),
+                status_code=422,
+            )
+
+        settings = deepcopy(
+            definition.settings
+        )
+
+        branding_settings = settings.setdefault(
+            "branding",
+            {},
+        )
+        branding_settings[
+            "display_name"
+        ] = name
+
+        booking_settings = settings.setdefault(
+            "booking",
+            {},
+        )
+        booking_settings[
+            "timezone"
+        ] = timezone
+
+        updated_definition = replace(
+            definition,
+            name=name,
+            default_language=default_language,
+            settings=settings,
+        )
+
+        instance_definition_repository.save(
+            updated_definition
+        )
+
+        return RedirectResponse(
+            url=(
+                f"/admin/clients/{client_id}"
+            ),
+            status_code=303,
+        )
+    @router.get(
         "/admin/clients/{client_id}",
         response_class=HTMLResponse,
     )
@@ -699,6 +1063,18 @@ def build_admin_router(
                 content=content,
             )
         )
+
+    router.include_router(
+        build_admin_services_router(
+            instance_definition_repository=(
+                instance_definition_repository
+            ),
+            definition_loader=(
+                load_editable_definition
+            ),
+            page_renderer=_render_page,
+        )
+    )
 
     return router
 
@@ -753,6 +1129,18 @@ def _render_client_detail(
         Identificador:
         <span class="identifier">{escape(instance.id)}</span>
     </p>
+    <a
+        class="primary-button"
+        href="/admin/clients/{escape(instance.id)}/edit"
+    >
+        Editar configuración
+    </a>
+    <a
+        class="primary-button"
+        href="/admin/clients/{escape(instance.id)}/services"
+    >
+        Servicios y precios
+    </a>
     <section class="panel">
         <div class="definition-grid">
             {_render_definition("Plantilla", template_id)}

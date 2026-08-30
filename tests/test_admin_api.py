@@ -233,3 +233,545 @@ def test_admin_creates_client_definition_as_draft(
     ] == "draft"
 
     repository.close()
+
+def test_admin_edit_client_page_shows_stored_values(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            default_language="es",
+            supported_languages=[
+                "es",
+                "en",
+            ],
+            settings={
+                "branding": {
+                    "display_name": "Salón Centro",
+                },
+                "booking": {
+                    "timezone": "Europe/Madrid",
+                },
+            },
+            metadata={
+                "admin_status": "draft",
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    response = client.get(
+        "/admin/clients/salon_centro/edit"
+    )
+
+    assert response.status_code == 200
+    assert "Editar bot" in response.text
+    assert 'value="Salón Centro"' in response.text
+    assert 'name="default_language"' in response.text
+    assert 'value="es" selected' in response.text
+    assert 'name="timezone"' in response.text
+    assert 'value="Europe/Madrid"' in response.text
+    assert (
+        'action="/admin/clients/salon_centro"'
+        in response.text
+    )
+
+    repository.close()
+
+
+def test_admin_updates_basic_client_configuration(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            default_language="es",
+            supported_languages=[
+                "es",
+                "en",
+            ],
+            settings={
+                "branding": {
+                    "display_name": "Salón Centro",
+                },
+                "booking": {
+                    "timezone": "Europe/Madrid",
+                },
+                "services": [
+                    {
+                        "id": "haircut",
+                        "name": {
+                            "es": "Corte",
+                        },
+                    },
+                ],
+            },
+            metadata={
+                "admin_status": "draft",
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    response = client.post(
+        "/admin/clients/salon_centro",
+        data={
+            "name": "Salón Centro Renovado",
+            "default_language": "en",
+            "timezone": "Atlantic/Canary",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers[
+        "location"
+    ] == (
+        "/admin/clients/salon_centro"
+    )
+
+    updated_definition = repository.get(
+        "salon_centro"
+    )
+
+    assert updated_definition is not None
+    assert updated_definition.name == (
+        "Salón Centro Renovado"
+    )
+    assert updated_definition.default_language == "en"
+    assert updated_definition.settings[
+        "branding"
+    ]["display_name"] == (
+        "Salón Centro Renovado"
+    )
+    assert updated_definition.settings[
+        "booking"
+    ]["timezone"] == (
+        "Atlantic/Canary"
+    )
+
+    assert updated_definition.settings[
+        "services"
+    ] == [
+        {
+            "id": "haircut",
+            "name": {
+                "es": "Corte",
+            },
+        },
+    ]
+
+    repository.close()
+
+def test_admin_can_edit_builtin_client_into_repository(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    edit_response = client.get(
+        "/admin/clients/hairdressing_demo/edit"
+    )
+
+    assert edit_response.status_code == 200
+    assert "Salón Estilo" in edit_response.text
+    assert "Europe/Madrid" in edit_response.text
+
+    update_response = client.post(
+        "/admin/clients/hairdressing_demo",
+        data={
+            "name": "Salón Estilo Renovado",
+            "default_language": "es",
+            "timezone": "Europe/Madrid",
+        },
+        follow_redirects=False,
+    )
+
+    assert update_response.status_code == 303
+
+    stored_definition = repository.get(
+        "hairdressing_demo"
+    )
+
+    assert stored_definition is not None
+    assert stored_definition.name == (
+        "Salón Estilo Renovado"
+    )
+    assert stored_definition.settings[
+        "services"
+    ]
+    assert stored_definition.metadata[
+        "business_type"
+    ] == "hairdressing"
+
+    repository.close()
+
+def test_admin_services_page_lists_configured_services(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            settings={
+                "services": [
+                    {
+                        "id": "haircut",
+                        "name": {
+                            "es": "Corte",
+                            "en": "Haircut",
+                        },
+                        "duration_minutes": 30,
+                        "price": {
+                            "type": "fixed",
+                            "amount_cents": 2000,
+                            "currency": "EUR",
+                        },
+                    },
+                ],
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    response = client.get(
+        "/admin/clients/salon_centro/services"
+    )
+
+    assert response.status_code == 200
+    assert "Servicios y precios" in response.text
+    assert "Corte" in response.text
+    assert "30 minutos" in response.text
+    assert "20,00 €" in response.text
+    assert (
+        "/admin/clients/salon_centro/services/new"
+        in response.text
+    )
+    assert (
+        "/admin/clients/salon_centro/services/haircut/edit"
+        in response.text
+    )
+    assert (
+        "/admin/clients/salon_centro/services/haircut/delete"
+        in response.text
+    )
+
+    repository.close()
+
+
+def test_admin_adds_service_to_client_definition(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            settings={
+                "services": [],
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    form_response = client.get(
+        "/admin/clients/salon_centro/services/new"
+    )
+
+    assert form_response.status_code == 200
+    assert "Añadir servicio" in form_response.text
+    assert 'name="service_id"' in form_response.text
+    assert 'name="name_es"' in form_response.text
+    assert 'name="duration_minutes"' in form_response.text
+    assert 'name="price_type"' in form_response.text
+    assert 'name="price_amount"' in form_response.text
+
+    create_response = client.post(
+        "/admin/clients/salon_centro/services",
+        data={
+            "service_id": "highlights",
+            "name_es": "Mechas",
+            "name_en": "Highlights",
+            "duration_minutes": "120",
+            "price_type": "from",
+            "price_amount": "65.50",
+            "currency": "EUR",
+        },
+        follow_redirects=False,
+    )
+
+    assert create_response.status_code == 303
+    assert create_response.headers[
+        "location"
+    ] == (
+        "/admin/clients/salon_centro/services"
+    )
+
+    updated_definition = repository.get(
+        "salon_centro"
+    )
+
+    assert updated_definition is not None
+    assert updated_definition.settings[
+        "services"
+    ] == [
+        {
+            "id": "highlights",
+            "name": {
+                "es": "Mechas",
+                "en": "Highlights",
+            },
+            "duration_minutes": 120,
+            "price": {
+                "type": "from",
+                "amount_cents": 6550,
+                "currency": "EUR",
+            },
+        },
+    ]
+
+    repository.close()
+
+def test_admin_edits_existing_service(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            settings={
+                "services": [
+                    {
+                        "id": "highlights",
+                        "name": {
+                            "es": "Mechas",
+                            "en": "Highlights",
+                        },
+                        "duration_minutes": 120,
+                        "price": {
+                            "type": "from",
+                            "amount_cents": 6500,
+                            "currency": "EUR",
+                        },
+                    },
+                    {
+                        "id": "haircut",
+                        "name": {
+                            "es": "Corte",
+                        },
+                        "duration_minutes": 30,
+                        "price": {
+                            "type": "fixed",
+                            "amount_cents": 2000,
+                            "currency": "EUR",
+                        },
+                    },
+                ],
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    form_response = client.get(
+        "/admin/clients/salon_centro/services/highlights/edit"
+    )
+
+    assert form_response.status_code == 200
+    assert "Editar servicio" in form_response.text
+    assert 'value="Mechas"' in form_response.text
+    assert 'value="120"' in form_response.text
+    assert 'value="65.00"' in form_response.text
+
+    update_response = client.post(
+        "/admin/clients/salon_centro/services/highlights",
+        data={
+            "name_es": "Mechas premium",
+            "name_en": "Premium highlights",
+            "duration_minutes": "150",
+            "price_type": "fixed",
+            "price_amount": "80.00",
+            "currency": "EUR",
+        },
+        follow_redirects=False,
+    )
+
+    assert update_response.status_code == 303
+    assert update_response.headers[
+        "location"
+    ] == (
+        "/admin/clients/salon_centro/services"
+    )
+
+    updated_definition = repository.get(
+        "salon_centro"
+    )
+
+    assert updated_definition is not None
+
+    services = updated_definition.settings[
+        "services"
+    ]
+
+    assert len(services) == 2
+    assert services[0] == {
+        "id": "highlights",
+        "name": {
+            "es": "Mechas premium",
+            "en": "Premium highlights",
+        },
+        "duration_minutes": 150,
+        "price": {
+            "type": "fixed",
+            "amount_cents": 8000,
+            "currency": "EUR",
+        },
+    }
+    assert services[1]["id"] == "haircut"
+
+    repository.close()
+
+
+def test_admin_deletes_service_after_confirmation(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            settings={
+                "services": [
+                    {
+                        "id": "haircut",
+                        "name": {
+                            "es": "Corte",
+                        },
+                        "duration_minutes": 30,
+                        "price": {
+                            "type": "fixed",
+                            "amount_cents": 2000,
+                            "currency": "EUR",
+                        },
+                    },
+                ],
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    confirmation_response = client.get(
+        "/admin/clients/salon_centro/services/haircut/delete"
+    )
+
+    assert confirmation_response.status_code == 200
+    assert "Eliminar servicio" in confirmation_response.text
+    assert "Corte" in confirmation_response.text
+    assert (
+        'action="/admin/clients/salon_centro/services/haircut/delete"'
+        in confirmation_response.text
+    )
+
+    delete_response = client.post(
+        "/admin/clients/salon_centro/services/haircut/delete",
+        follow_redirects=False,
+    )
+
+    assert delete_response.status_code == 303
+    assert delete_response.headers[
+        "location"
+    ] == (
+        "/admin/clients/salon_centro/services"
+    )
+
+    updated_definition = repository.get(
+        "salon_centro"
+    )
+
+    assert updated_definition is not None
+    assert updated_definition.settings[
+        "services"
+    ] == []
+
+    repository.close()
