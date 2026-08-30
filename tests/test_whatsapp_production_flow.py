@@ -267,3 +267,77 @@ def test_whatsapp_production_flow_ignores_duplicate_message_id(
         graph_client.sent_messages[0]["to"]
         == _PHONE_NUMBER
     )
+def test_production_flow_ignores_unknown_receiver_phone_number(
+) -> None:
+    from chatbot.instances import (
+        SQLiteInstanceDefinitionRepository,
+    )
+
+    graph_client = RecordingWhatsAppGraphClient()
+    repository = SQLiteInstanceDefinitionRepository(
+        database_path=":memory:",
+    )
+
+    app = create_app(
+        config=build_config(),
+        calendar_service=None,
+        graph_client=graph_client,
+        instance_definition_repository=repository,
+    )
+
+    payload = build_payload(
+        message_id="wamid.unknown-number-1",
+        text="Peluquería",
+    )
+    payload["entry"][0]["changes"][0]["value"][
+        "metadata"
+    ]["phone_number_id"] = "unknown-phone-number-id"
+
+    response = post_signed_webhook(
+        TestClient(app),
+        payload,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ok",
+    }
+    assert graph_client.sent_messages == []
+
+    repository.close()
+def test_production_flow_routes_registered_receiver_phone_number(
+) -> None:
+    from chatbot.instances import (
+        SQLiteInstanceDefinitionRepository,
+    )
+
+    graph_client = RecordingWhatsAppGraphClient()
+    repository = SQLiteInstanceDefinitionRepository(
+        database_path=":memory:",
+    )
+
+    app = create_app(
+        config=build_config(),
+        calendar_service=None,
+        graph_client=graph_client,
+        instance_definition_repository=repository,
+    )
+
+    response = post_signed_webhook(
+        TestClient(app),
+        build_payload(
+            message_id="wamid.registered-number-1",
+            text="Peluquería",
+        ),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ok",
+    }
+    assert len(graph_client.sent_messages) == 1
+    assert graph_client.sent_messages[0]["to"] == (
+        _PHONE_NUMBER
+    )
+
+    repository.close()

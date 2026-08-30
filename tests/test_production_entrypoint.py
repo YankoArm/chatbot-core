@@ -416,3 +416,39 @@ def test_runtime_seed_registers_configured_client_for_tenant_routing(
     assert stored_definition == definition
 
     repository.close()
+def test_create_app_seeds_configured_client_when_repository_is_provided(
+) -> None:
+    repository = SQLiteInstanceDefinitionRepository(
+        database_path=":memory:",
+    )
+    config = FlowForgeConfig(
+        whatsapp=WhatsAppConfig(
+            access_token="test-access-token",
+            phone_number_id="test-phone-number-id",
+            verify_token="test-verify-token",
+            app_secret="test-app-secret",
+        ),
+        server=ServerConfig(
+            host="127.0.0.1",
+            port=8000,
+        ),
+        client_id="hairdressing_demo",
+    )
+
+    create_app(
+        config=config,
+        calendar_service=None,
+        graph_client=FakeWhatsAppGraphClient(),
+        instance_definition_repository=repository,
+    )
+
+    definition = repository.get(
+        "hairdressing_demo"
+    )
+
+    assert definition is not None
+    assert definition.whatsapp_phone_number_id == (
+        "test-phone-number-id"
+    )
+
+    repository.close()

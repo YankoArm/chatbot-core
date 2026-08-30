@@ -10,6 +10,9 @@ from chatbot.api.whatsapp_app import (
     build_whatsapp_api,
 )
 from chatbot.application import Bootstrap
+from chatbot.application.tenant_registry import (
+    TenantApplicationRegistry,
+)
 from chatbot.booking import (
     BookingRepository,
     BookingService,
@@ -24,13 +27,19 @@ from chatbot.capabilities.booking import (
 from chatbot.clients.registry import (
     build_client_instance,
     build_client_definition,
+    build_instance_from_definition,
 )
 from chatbot.connectors.whatsapp.bootstrap import (
     WhatsAppGraphClientProtocol,
+    build_tenant_whatsapp_message_handler,
     build_whatsapp_message_handler,
 )
 from chatbot.connectors.whatsapp.graph_client import (
     WhatsAppGraphClient,
+    WhatsAppGraphClientProvider,
+)
+from chatbot.connectors.whatsapp.tenant_router import (
+    WhatsAppTenantRouter,
 )
 from chatbot.connectors.whatsapp.signature import (
     WhatsAppSignatureVerifier,
@@ -39,6 +48,7 @@ from chatbot.infrastructure.config import (
     FlowForgeConfig,
 )
 from chatbot.instances import (
+    InstanceDefinition,
     SQLiteInstanceDefinitionRepository,
 )
 from run_google_calendar import (
@@ -161,6 +171,69 @@ def ensure_runtime_client_definition(
 
     return definition
 
+def build_tenant_application(
+    *,
+    definition: InstanceDefinition,
+    calendar_service: CalendarService | None,
+    booking_repository: BookingRepository | None,
+) -> object:
+    """
+    Build the isolated runtime application for one stored client.
+    """
+
+    instance = build_instance_from_definition(
+        definition
+    )
+    capability_factories: dict[str, object] = {}
+
+    if calendar_service is not None:
+        if booking_repository is None:
+            raise ValueError(
+                "Booking repository is required with Calendar."
+            )
+
+        booking_configuration = (
+            build_booking_configuration(
+                instance
+            )
+        )
+
+        booking_service = BookingService(
+            repository=booking_repository,
+            calendar_service=calendar_service,
+            client_id=definition.id,
+        )
+
+        capability_factories["booking"] = (
+            lambda: BookingCapability(
+                booking_service=booking_service,
+                business_hours=(
+                    booking_configuration.business_hours
+                ),
+                booking_rules=(
+                    booking_configuration.booking_rules
+                ),
+                services=(
+                    booking_configuration.services
+                ),
+            )
+        )
+    else:
+        instance = replace(
+            instance,
+            capabilities=[
+                capability_name
+                for capability_name in instance.capabilities
+                if capability_name != "booking"
+            ],
+        )
+
+    return Bootstrap(
+        capability_factories=capability_factories,
+    ).build_from_instance(
+        instance
+    )
+
 def create_app(
     *,
     config: FlowForgeConfig,
@@ -181,6 +254,13 @@ def create_app(
     while the remaining client capabilities continue working.
     """
 
+    if instance_definition_repository is not None:
+        ensure_runtime_client_definition(
+            config=config,
+            instance_definition_repository=(
+                instance_definition_repository
+            ),
+        )
     instance = build_client_instance(
         config.client_id,
     )
@@ -240,18 +320,57 @@ def create_app(
         instance,
     )
 
-    graph_message_handler = (
-        build_whatsapp_message_handler(
-            application=application,
-            graph_client=graph_client,
-            is_active=lambda: is_runtime_client_active(
-                client_id=config.client_id,
+    if instance_definition_repository is None:
+        graph_message_handler = (
+            build_whatsapp_message_handler(
+                application=application,
+                graph_client=graph_client,
+                is_active=lambda: is_runtime_client_active(
+                    client_id=config.client_id,
+                    instance_definition_repository=None,
+                ),
+            )
+        )
+    else:
+        tenant_router = WhatsAppTenantRouter(
+            instance_definition_repository=(
+                instance_definition_repository
+            ),
+        )
+
+        application_registry = (
+            TenantApplicationRegistry(
                 instance_definition_repository=(
                     instance_definition_repository
                 ),
-            ),
+                application_factory=lambda definition: (
+                    build_tenant_application(
+                        definition=definition,
+                        calendar_service=calendar_service,
+                        booking_repository=(
+                            active_booking_repository
+                        ),
+                    )
+                ),
+            )
         )
-    )
+
+        graph_client_provider = (
+            WhatsAppGraphClientProvider(
+                access_token=config.whatsapp.access_token,
+                graph_client_factory=lambda _phone_number_id: (
+                    graph_client
+                ),
+            )
+        )
+
+        graph_message_handler = (
+            build_tenant_whatsapp_message_handler(
+                tenant_router=tenant_router,
+                application_registry=application_registry,
+                graph_client_provider=graph_client_provider,
+            )
+        )
 
     signature_verifier = (
         WhatsAppSignatureVerifier(
