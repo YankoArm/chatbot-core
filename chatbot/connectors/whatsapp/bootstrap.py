@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from typing import Protocol
 
 from chatbot.connectors.whatsapp.application_adapter import (
@@ -38,11 +39,13 @@ def build_whatsapp_message_handler(
     *,
     application: FlowForgeApplicationProtocol,
     graph_client: WhatsAppGraphClientProtocol,
+    is_active: Callable[[], bool] | None = None,
 ) -> WhatsAppMessageHandler:
     parser = WhatsAppPayloadParser()
 
     orchestrator = FlowForgeWhatsAppAdapter(
         application=application,
+        is_active=is_active,
     )
 
     sender = WhatsAppGraphSender(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Protocol
 
 from chatbot.connectors.whatsapp.message_handler import (
@@ -29,13 +30,20 @@ class FlowForgeWhatsAppAdapter:
     def __init__(
         self,
         application: FlowForgeApplicationProtocol,
+        is_active: Callable[[], bool] | None = None,
     ) -> None:
         self._application = application
+        self._is_active = is_active or (
+            lambda: True
+        )
 
     def handle(
         self,
         message: IncomingWhatsAppMessage,
-    ) -> str:
+    ) -> str | None:
+        if not self._is_active():
+            return None
+
         response = self._application.chat(
             session_id=message.user_id,
             message=message.text,

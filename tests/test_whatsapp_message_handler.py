@@ -510,3 +510,141 @@ def test_whatsapp_message_handler_bounds_processed_id_cache(
 
     assert evicted_result == "OK"
     assert orchestrator.call_count == 4
+def test_whatsapp_adapter_skips_inactive_lifecycle(
+) -> None:
+    application = RecordingFlowForgeApplication()
+    graph_client = RecordingGraphClient()
+
+    handler = WhatsAppMessageHandler(
+        parser=WhatsAppPayloadParser(),
+        orchestrator=FlowForgeWhatsAppAdapter(
+            application=application,
+            is_active=lambda: False,
+        ),
+        sender=WhatsAppGraphSender(
+            graph_client=graph_client,
+        ),
+    )
+
+    payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": "34600000000",
+                                    "text": {
+                                        "body": "Hola",
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    result = handler.handle(
+        payload
+    )
+
+    assert result is None
+    assert application.session_id is None
+    assert graph_client.to is None
+    assert graph_client.text is None
+def test_whatsapp_adapter_rechecks_lifecycle_between_messages(
+) -> None:
+    from chatbot.instances import (
+        InstanceDefinition,
+        SQLiteInstanceDefinitionRepository,
+    )
+    from run_flowforge import (
+        is_runtime_client_active,
+    )
+
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="hairdressing_demo",
+            name="Salón Estilo",
+            template_id="hairdressing",
+            metadata={
+                "admin_status": "paused",
+            },
+        )
+    )
+
+    application = RecordingFlowForgeApplication()
+    graph_client = RecordingGraphClient()
+
+    handler = WhatsAppMessageHandler(
+        parser=WhatsAppPayloadParser(),
+        orchestrator=FlowForgeWhatsAppAdapter(
+            application=application,
+            is_active=lambda: is_runtime_client_active(
+                client_id="hairdressing_demo",
+                instance_definition_repository=repository,
+            ),
+        ),
+        sender=WhatsAppGraphSender(
+            graph_client=graph_client,
+        ),
+    )
+
+    payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": "34600000000",
+                                    "text": {
+                                        "body": "Hola",
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    first_result = handler.handle(
+        payload
+    )
+
+    repository.save(
+        InstanceDefinition(
+            id="hairdressing_demo",
+            name="Salón Estilo",
+            template_id="hairdressing",
+            metadata={
+                "admin_status": "active",
+            },
+        )
+    )
+
+    second_result = handler.handle(
+        payload
+    )
+
+    assert first_result is None
+    assert second_result == (
+        "Respuesta real de FlowForge"
+    )
+    assert graph_client.to == "34600000000"
+    assert graph_client.text == (
+        "Respuesta real de FlowForge"
+    )
+
+    repository.close()

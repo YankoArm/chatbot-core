@@ -86,6 +86,38 @@ def build_admin_repository(
     )
 
 
+def is_runtime_client_active(
+    *,
+    client_id: str,
+    instance_definition_repository: (
+        SQLiteInstanceDefinitionRepository | None
+    ),
+) -> bool:
+    """
+    Return whether the configured client may answer messages.
+
+    Built-in clients remain active until an editable definition
+    explicitly changes their lifecycle status.
+    """
+
+    if instance_definition_repository is None:
+        return True
+
+    definition = instance_definition_repository.get(
+        client_id
+    )
+
+    if definition is None:
+        return True
+
+    return (
+        definition.metadata.get(
+            "admin_status",
+            "active",
+        )
+        == "active"
+    )
+
 def create_app(
     *,
     config: FlowForgeConfig,
@@ -169,6 +201,12 @@ def create_app(
         build_whatsapp_message_handler(
             application=application,
             graph_client=graph_client,
+            is_active=lambda: is_runtime_client_active(
+                client_id=config.client_id,
+                instance_definition_repository=(
+                    instance_definition_repository
+                ),
+            ),
         )
     )
 

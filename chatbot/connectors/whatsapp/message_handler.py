@@ -89,7 +89,10 @@ class WhatsAppMessageHandler:
                 parsed_message
             )
 
-            if self._sender is not None:
+            if (
+                self._sender is not None
+                and response is not None
+            ):
                 self._sender.send_text(
                     recipient=parsed_message.user_id,
                     text=str(response),

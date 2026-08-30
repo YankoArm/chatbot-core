@@ -347,3 +347,32 @@ def test_create_app_uses_provided_admin_repository(
     )
 
     admin_repository.close()
+def test_runtime_client_availability_uses_stored_lifecycle_status(
+) -> None:
+    from chatbot.instances import InstanceDefinition
+    from run_flowforge import (
+        is_runtime_client_active,
+    )
+
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="hairdressing_demo",
+            name="Salón Estilo",
+            template_id="hairdressing",
+            metadata={
+                "admin_status": "paused",
+            },
+        )
+    )
+
+    assert is_runtime_client_active(
+        client_id="hairdressing_demo",
+        instance_definition_repository=repository,
+    ) is False
+
+    repository.close()
