@@ -136,3 +136,50 @@ def test_human_transfer_handles_missing_pending_actions():
         is True
     )
     assert response.metadata["transfer_registered"] is False
+
+def test_human_transfer_uses_custom_knowledge_response(
+) -> None:
+    class CustomKnowledgeService:
+        def get_section(
+            self,
+            section: str,
+            default=None,
+        ):
+            knowledge = {
+                "human_transfer": {
+                    "response": {
+                        "es": (
+                            "Avisaremos al equipo para que te atienda."
+                        ),
+                        "en": (
+                            "We will notify the team to assist you."
+                        ),
+                    },
+                },
+            }
+
+            return knowledge.get(
+                section,
+                default,
+            )
+
+    context = build_context(
+        language=Language.EN,
+    )
+    context.knowledge_service = (
+        CustomKnowledgeService()
+    )
+
+    capability = HumanTransferCapability()
+
+    response = capability.handle(
+        context,
+        "I need human support",
+    )
+
+    assert response.text == (
+        "We will notify the team to assist you."
+    )
+    assert response.metadata[
+        "transfer_registered"
+    ] is True

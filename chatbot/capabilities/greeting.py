@@ -79,10 +79,18 @@ class GreetingCapability(BaseCapability):
         context: Any,
         message: str,
     ) -> Response:
-        language = self._get_language(context)
+        language = self._get_language(
+            context
+        )
+        response_text = (
+            self._get_configured_response(
+                context=context,
+                language=language,
+            )
+        )
 
         return Response(
-            text=_RESPONSES[language],
+            text=response_text,
             metadata={
                 "capability": self.name,
                 "handled": True,
@@ -90,6 +98,83 @@ class GreetingCapability(BaseCapability):
             },
         )
 
+    @staticmethod
+    def _get_configured_response(
+        *,
+        context: Any,
+        language: Language,
+    ) -> str:
+        knowledge_service = getattr(
+            context,
+            "knowledge_service",
+            None,
+        )
+
+        if knowledge_service is None:
+            return _RESPONSES[
+                language
+            ]
+
+        get_section = getattr(
+            knowledge_service,
+            "get_section",
+            None,
+        )
+
+        if not callable(
+            get_section
+        ):
+            return _RESPONSES[
+                language
+            ]
+
+        try:
+            greetings = get_section(
+                "greetings",
+                {},
+            )
+        except FileNotFoundError:
+            return _RESPONSES[
+                language
+            ]
+
+        if not isinstance(
+            greetings,
+            dict,
+        ):
+            return _RESPONSES[
+                language
+            ]
+
+        welcome = greetings.get(
+            "welcome",
+            {},
+        )
+
+        if not isinstance(
+            welcome,
+            dict,
+        ):
+            return _RESPONSES[
+                language
+            ]
+
+        configured_response = welcome.get(
+            language.value
+        )
+
+        if (
+            isinstance(
+                configured_response,
+                str,
+            )
+            and configured_response.strip()
+        ):
+            return configured_response.strip()
+
+        return _RESPONSES[
+            language
+        ]
     @staticmethod
     def _get_language(
         context: Any,

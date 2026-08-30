@@ -11,6 +11,9 @@ from typing import Protocol
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from chatbot.api.admin_business import (
+    build_admin_business_router,
+)
 from chatbot.api.admin_faq import (
     build_admin_faq_router,
 )
@@ -1106,6 +1109,18 @@ def build_admin_router(
         )
     )
 
+    router.include_router(
+        build_admin_business_router(
+            instance_definition_repository=(
+                instance_definition_repository
+            ),
+            definition_loader=(
+                load_editable_definition
+            ),
+            page_renderer=_render_page,
+        )
+    )
+
     return router
 
 def _render_client_card(
@@ -1176,6 +1191,12 @@ def _render_client_detail(
         href="/admin/clients/{escape(instance.id)}/schedule"
     >
         Horarios y reservas
+    </a>
+    <a
+        class="primary-button"
+        href="/admin/clients/{escape(instance.id)}/business"
+    >
+        Información del negocio
     </a>
     <a
         class="primary-button"

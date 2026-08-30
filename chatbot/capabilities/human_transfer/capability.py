@@ -97,15 +97,23 @@ class HumanTransferCapability(BaseCapability):
         context: Any,
         message: str,
     ) -> Response:
-        language = self._get_language(context)
+        language = self._get_language(
+            context
+        )
 
         transfer_registered = self._register_transfer(
             context=context,
             message=message,
         )
+        response_text = (
+            self._get_configured_response(
+                context=context,
+                language=language,
+            )
+        )
 
         return Response(
-            text=_RESPONSES[language],
+            text=response_text,
             metadata={
                 "capability": self.name,
                 "handled": True,
@@ -115,6 +123,83 @@ class HumanTransferCapability(BaseCapability):
             },
         )
 
+    @staticmethod
+    def _get_configured_response(
+        *,
+        context: Any,
+        language: Language,
+    ) -> str:
+        knowledge_service = getattr(
+            context,
+            "knowledge_service",
+            None,
+        )
+
+        if knowledge_service is None:
+            return _RESPONSES[
+                language
+            ]
+
+        get_section = getattr(
+            knowledge_service,
+            "get_section",
+            None,
+        )
+
+        if not callable(
+            get_section
+        ):
+            return _RESPONSES[
+                language
+            ]
+
+        try:
+            transfer_settings = get_section(
+                "human_transfer",
+                {},
+            )
+        except FileNotFoundError:
+            return _RESPONSES[
+                language
+            ]
+
+        if not isinstance(
+            transfer_settings,
+            dict,
+        ):
+            return _RESPONSES[
+                language
+            ]
+
+        responses = transfer_settings.get(
+            "response",
+            {},
+        )
+
+        if not isinstance(
+            responses,
+            dict,
+        ):
+            return _RESPONSES[
+                language
+            ]
+
+        configured_response = responses.get(
+            language.value
+        )
+
+        if (
+            isinstance(
+                configured_response,
+                str,
+            )
+            and configured_response.strip()
+        ):
+            return configured_response.strip()
+
+        return _RESPONSES[
+            language
+        ]
     def _register_transfer(
         self,
         context: Any,

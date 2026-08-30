@@ -89,6 +89,11 @@ def test_admin_client_page_shows_resolved_configuration(
     )
     assert "Horarios y reservas" in response.text
     assert (
+        "/admin/clients/hairdressing_demo/business"
+        in response.text
+    )
+    assert "Información del negocio" in response.text
+    assert (
         "/admin/clients/hairdressing_demo/faq"
         in response.text
     )
@@ -1699,6 +1704,293 @@ def test_admin_faq_page_includes_and_edits_file_based_entry(
 
     assert "Dirección original." not in (
         updated_list_response.text
+    )
+
+    repository.close()
+
+def test_admin_business_page_shows_company_and_messages(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            settings={
+                "knowledge": {
+                    "company": {
+                        "name": "Salón Centro",
+                        "description": "Peluquería en Madrid.",
+                        "phone": "+34600123123",
+                        "email": "hola@saloncentro.es",
+                        "address": "Calle Mayor, 10",
+                        "website": "https://saloncentro.es",
+                    },
+                    "greetings": {
+                        "welcome": {
+                            "es": "¡Hola! ¿En qué podemos ayudarte?",
+                            "en": "Hello! How can we help you?",
+                        },
+                    },
+                    "human_transfer": {
+                        "response": {
+                            "es": "Te pondremos en contacto con el salón.",
+                            "en": "We will connect you with the salon.",
+                        },
+                    },
+                },
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    response = client.get(
+        "/admin/clients/salon_centro/business"
+    )
+
+    assert response.status_code == 200
+    assert "Información del negocio" in response.text
+    assert 'value="Salón Centro"' in response.text
+    assert "Peluquería en Madrid." in response.text
+    assert 'value="+34600123123"' in response.text
+    assert 'value="hola@saloncentro.es"' in response.text
+    assert 'value="Calle Mayor, 10"' in response.text
+    assert 'value="https://saloncentro.es"' in response.text
+    assert "¡Hola! ¿En qué podemos ayudarte?" in (
+        response.text
+    )
+    assert "Te pondremos en contacto con el salón." in (
+        response.text
+    )
+
+    repository.close()
+
+
+def test_admin_updates_company_and_custom_messages(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            settings={
+                "knowledge": {
+                    "faq": {
+                        "location": {
+                            "keywords": [
+                                "direccion",
+                            ],
+                            "answers": {
+                                "es": "Estamos en Madrid.",
+                            },
+                        },
+                    },
+                },
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    response = client.post(
+        "/admin/clients/salon_centro/business",
+        data={
+            "company_name": "Salón Centro Renovado",
+            "description": "Especialistas en color y corte.",
+            "phone": "+34600987654",
+            "email": "contacto@saloncentro.es",
+            "address": "Gran Vía, 20, Madrid",
+            "website": "https://saloncentro.es",
+            "greeting_es": (
+                "¡Hola! Bienvenido a Salón Centro."
+            ),
+            "greeting_en": (
+                "Hello! Welcome to Salón Centro."
+            ),
+            "human_transfer_es": (
+                "Avisaremos al equipo para que te atienda."
+            ),
+            "human_transfer_en": (
+                "We will notify the team to assist you."
+            ),
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/admin/clients/salon_centro"
+    )
+
+    stored_definition = repository.get(
+        "salon_centro"
+    )
+
+    assert stored_definition is not None
+
+    knowledge = stored_definition.settings[
+        "knowledge"
+    ]
+
+    assert knowledge["faq"]["location"]["answers"]["es"] == (
+        "Estamos en Madrid."
+    )
+    assert knowledge["company"] == {
+        "name": "Salón Centro Renovado",
+        "description": "Especialistas en color y corte.",
+        "phone": "+34600987654",
+        "email": "contacto@saloncentro.es",
+        "address": "Gran Vía, 20, Madrid",
+        "website": "https://saloncentro.es",
+    }
+    assert knowledge["greetings"]["welcome"] == {
+        "es": "¡Hola! Bienvenido a Salón Centro.",
+        "en": "Hello! Welcome to Salón Centro.",
+    }
+    assert knowledge["human_transfer"]["response"] == {
+        "es": "Avisaremos al equipo para que te atienda.",
+        "en": "We will notify the team to assist you.",
+    }
+
+    repository.close()
+
+@pytest.mark.parametrize(
+    (
+        "overrides",
+        "expected_message",
+    ),
+    [
+        (
+            {
+                "company_name": "",
+            },
+            "nombre comercial es obligatorio",
+        ),
+        (
+            {
+                "email": "correo-invalido",
+            },
+            "correo electrónico no es válido",
+        ),
+        (
+            {
+                "website": "saloncentro.es",
+            },
+            "sitio web debe ser una URL completa",
+        ),
+        (
+            {
+                "greeting_es": "",
+            },
+            "saludo en español es obligatorio",
+        ),
+        (
+            {
+                "human_transfer_es": "",
+            },
+            "mensaje de transferencia en español es obligatorio",
+        ),
+    ],
+)
+def test_admin_rejects_invalid_business_information(
+    overrides: dict[str, str],
+    expected_message: str,
+) -> None:
+    original_settings = {
+        "knowledge": {
+            "faq": {
+                "location": {
+                    "keywords": [
+                        "direccion",
+                    ],
+                    "answers": {
+                        "es": "Estamos en Madrid.",
+                    },
+                },
+            },
+        },
+    }
+
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            settings=original_settings,
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    submitted_data = {
+        "company_name": "Salón Centro",
+        "description": "Peluquería en Madrid.",
+        "phone": "+34600123123",
+        "email": "hola@saloncentro.es",
+        "address": "Calle Mayor, 10",
+        "website": "https://saloncentro.es",
+        "greeting_es": "¡Hola! ¿En qué podemos ayudarte?",
+        "greeting_en": "Hello! How can we help you?",
+        "human_transfer_es": (
+            "Avisaremos al equipo para que te atienda."
+        ),
+        "human_transfer_en": (
+            "We will notify the team to assist you."
+        ),
+    }
+    submitted_data.update(
+        overrides
+    )
+
+    response = client.post(
+        "/admin/clients/salon_centro/business",
+        data=submitted_data,
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert expected_message in response.text
+
+    stored_definition = repository.get(
+        "salon_centro"
+    )
+
+    assert stored_definition is not None
+    assert stored_definition.settings == (
+        original_settings
     )
 
     repository.close()

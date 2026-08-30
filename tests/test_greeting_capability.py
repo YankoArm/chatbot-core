@@ -121,3 +121,44 @@ def test_does_not_handle_word_starting_with_hi(
         context,
         "history",
     ) is False
+
+def test_handle_uses_custom_knowledge_greeting(
+    capability: GreetingCapability,
+    context: ConversationContext,
+) -> None:
+    class CustomKnowledgeService:
+        def get_section(
+            self,
+            section: str,
+            default=None,
+        ):
+            knowledge = {
+                "greetings": {
+                    "welcome": {
+                        "es": (
+                            "¡Hola! Bienvenido a Salón Centro."
+                        ),
+                        "en": (
+                            "Hello! Welcome to Salón Centro."
+                        ),
+                    },
+                },
+            }
+
+            return knowledge.get(
+                section,
+                default,
+            )
+
+    context.knowledge_service = (
+        CustomKnowledgeService()
+    )
+
+    response = capability.handle(
+        context,
+        "hola",
+    )
+
+    assert response.text == (
+        "¡Hola! Bienvenido a Salón Centro."
+    )
