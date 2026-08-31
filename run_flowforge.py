@@ -21,6 +21,9 @@ from chatbot.booking import (
     build_booking_configuration,
 )
 from chatbot.calendar import CalendarService
+from chatbot.calendar.tenant_registry import (
+    TenantCalendarRegistry,
+)
 from chatbot.capabilities.booking import (
     BookingCapability,
 )
@@ -52,7 +55,7 @@ from chatbot.instances import (
     SQLiteInstanceDefinitionRepository,
 )
 from run_google_calendar import (
-    build_calendar_service,
+    build_calendar_service_factory,
     DEFAULT_CALENDAR_ID,
 )
 
@@ -238,7 +241,9 @@ def create_app(
     *,
     config: FlowForgeConfig,
     calendar_service: CalendarService | None,
+    calendar_service_factory: object | None = None,
     graph_client: WhatsAppGraphClientProtocol,
+    graph_client_provider: object | None = None,
     booking_repository: BookingRepository | None = None,
     instance_definition_repository: (
         SQLiteInstanceDefinitionRepository | None
@@ -269,6 +274,16 @@ def create_app(
     active_booking_repository: (
         BookingRepository | None
     ) = None
+
+    if (
+        calendar_service is None
+        and calendar_service_factory is not None
+    ):
+        active_booking_repository = (
+            booking_repository
+            if booking_repository is not None
+            else InMemoryBookingRepository()
+        )
 
     if calendar_service is not None:
         booking_configuration = (
@@ -332,6 +347,16 @@ def create_app(
             )
         )
     else:
+        tenant_calendar_registry = (
+            TenantCalendarRegistry(
+                calendar_service_factory=(
+                    calendar_service_factory
+                ),
+            )
+            if calendar_service_factory is not None
+            else None
+        )
+
         tenant_router = WhatsAppTenantRouter(
             instance_definition_repository=(
                 instance_definition_repository
@@ -346,7 +371,19 @@ def create_app(
                 application_factory=lambda definition: (
                     build_tenant_application(
                         definition=definition,
-                        calendar_service=calendar_service,
+                        calendar_service=(
+                            tenant_calendar_registry
+                            .get_calendar_service(
+                                definition.calendar_id
+                            )
+                            if (
+                                tenant_calendar_registry
+                                is not None
+                                and definition.calendar_id
+                                is not None
+                            )
+                            else calendar_service
+                        ),
                         booking_repository=(
                             active_booking_repository
                         ),
@@ -355,14 +392,15 @@ def create_app(
             )
         )
 
-        graph_client_provider = (
-            WhatsAppGraphClientProvider(
-                access_token=config.whatsapp.access_token,
-                graph_client_factory=lambda _phone_number_id: (
-                    graph_client
-                ),
+        if graph_client_provider is None:
+            graph_client_provider = (
+                WhatsAppGraphClientProvider(
+                    access_token=config.whatsapp.access_token,
+                    graph_client_factory=lambda _phone_number_id: (
+                        graph_client
+                    ),
+                )
             )
-        )
 
         graph_message_handler = (
             build_tenant_whatsapp_message_handler(
@@ -443,9 +481,10 @@ def create_production_app(
     """
 
     try:
-        calendar_service: CalendarService | None = (
-            build_calendar_service()
+        calendar_service_factory = (
+            build_calendar_service_factory()
         )
+        calendar_service: CalendarService | None = None
     except FileNotFoundError as error:
         logger.warning(
             "Google Calendar credentials are unavailable. "
@@ -453,6 +492,7 @@ def create_production_app(
             error,
         )
         calendar_service = None
+        calendar_service_factory = None
 
     graph_client = WhatsAppGraphClient(
         access_token=(
@@ -463,11 +503,17 @@ def create_production_app(
         ),
     )
 
+    graph_client_provider = (
+        WhatsAppGraphClientProvider(
+            access_token=config.whatsapp.access_token,
+        )
+    )
+
     booking_repository = (
         build_booking_repository(
             config
         )
-        if calendar_service is not None
+        if calendar_service_factory is not None
         else None
     )
 
@@ -480,7 +526,9 @@ def create_production_app(
     return create_app(
         config=config,
         calendar_service=calendar_service,
+        calendar_service_factory=calendar_service_factory,
         graph_client=graph_client,
+        graph_client_provider=graph_client_provider,
         booking_repository=booking_repository,
         instance_definition_repository=(
             instance_definition_repository

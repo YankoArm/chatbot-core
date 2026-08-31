@@ -27,9 +27,9 @@ DEFAULT_TIMEZONE = "Europe/Madrid"
 DEFAULT_SEARCH_DAYS = 30
 
 
-def build_calendar_service() -> CalendarService:
+def build_calendar_service_factory():
     """
-    Build CalendarService backed by Google Calendar.
+    Build CalendarService instances sharing one Google authentication.
     """
 
     google_service = build_google_calendar_service(
@@ -37,16 +37,30 @@ def build_calendar_service() -> CalendarService:
         token_path=DEFAULT_TOKEN_PATH,
     )
 
-    calendar_provider = GoogleCalendarProvider(
-        service=google_service,
-        calendar_id=DEFAULT_CALENDAR_ID,
-        timezone=DEFAULT_TIMEZONE,
-    )
+    def build_for_calendar(
+        calendar_id: str,
+    ) -> CalendarService:
+        calendar_provider = GoogleCalendarProvider(
+            service=google_service,
+            calendar_id=calendar_id,
+            timezone=DEFAULT_TIMEZONE,
+        )
 
-    return CalendarService(
-        calendar_provider
-    )
+        return CalendarService(
+            calendar_provider
+        )
 
+    return build_for_calendar
+
+
+def build_calendar_service() -> CalendarService:
+    """
+    Build the legacy default CalendarService.
+    """
+
+    return build_calendar_service_factory()(
+        DEFAULT_CALENDAR_ID
+    )
 
 def list_upcoming_bookings(
     calendar_service: CalendarService,

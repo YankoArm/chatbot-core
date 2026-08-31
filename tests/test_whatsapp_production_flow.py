@@ -341,3 +341,162 @@ def test_production_flow_routes_registered_receiver_phone_number(
     )
 
     repository.close()
+def test_production_flow_uses_receiver_specific_graph_client(
+) -> None:
+    from chatbot.instances import (
+        SQLiteInstanceDefinitionRepository,
+    )
+
+    class RecordingGraphClientProvider:
+        def __init__(
+            self,
+        ) -> None:
+            self.phone_number_ids: list[str] = []
+            self.graph_client = (
+                RecordingWhatsAppGraphClient()
+            )
+
+        def get_client(
+            self,
+            phone_number_id: str,
+        ) -> RecordingWhatsAppGraphClient:
+            self.phone_number_ids.append(
+                phone_number_id
+            )
+            return self.graph_client
+
+    fallback_graph_client = (
+        RecordingWhatsAppGraphClient()
+    )
+    graph_client_provider = (
+        RecordingGraphClientProvider()
+    )
+    repository = SQLiteInstanceDefinitionRepository(
+        database_path=":memory:",
+    )
+
+    app = create_app(
+        config=build_config(),
+        calendar_service=None,
+        graph_client=fallback_graph_client,
+        graph_client_provider=graph_client_provider,
+        instance_definition_repository=repository,
+    )
+
+    response = post_signed_webhook(
+        TestClient(app),
+        build_payload(
+            message_id="wamid.receiver-specific-1",
+            text="Peluquería",
+        ),
+    )
+
+    assert response.status_code == 200
+    assert graph_client_provider.phone_number_ids == [
+        "test-phone-number-id",
+    ]
+    assert len(
+        graph_client_provider.graph_client.sent_messages
+    ) == 1
+    assert fallback_graph_client.sent_messages == []
+
+    repository.close()
+def test_production_flow_uses_each_tenant_calendar_id(
+) -> None:
+    from dataclasses import replace
+
+    from chatbot.clients.registry import (
+        build_client_definition,
+    )
+    from chatbot.instances import (
+        SQLiteInstanceDefinitionRepository,
+    )
+
+    class RecordingCalendarServiceFactory:
+        def __init__(
+            self,
+        ) -> None:
+            self.calendar_ids: list[str] = []
+
+        def __call__(
+            self,
+            calendar_id: str,
+                ) -> object:
+            self.calendar_ids.append(
+                calendar_id
+            )
+            return object()
+
+    graph_client = RecordingWhatsAppGraphClient()
+    calendar_service_factory = (
+        RecordingCalendarServiceFactory()
+    )
+    repository = SQLiteInstanceDefinitionRepository(
+        database_path=":memory:",
+    )
+
+    base_definition = build_client_definition(
+        "hairdressing_demo"
+    )
+
+    repository.save(
+        replace(
+            base_definition,
+            id="salon_norte",
+            name="Salón Norte",
+            whatsapp_phone_number_id="phone-norte",
+            calendar_id="calendar-norte",
+        )
+    )
+    repository.save(
+        replace(
+            base_definition,
+            id="salon_sur",
+            name="Salón Sur",
+            whatsapp_phone_number_id="phone-sur",
+            calendar_id="calendar-sur",
+        )
+    )
+
+    app = create_app(
+        config=build_config(),
+        calendar_service=None,
+        calendar_service_factory=calendar_service_factory,
+        graph_client=graph_client,
+        instance_definition_repository=repository,
+    )
+    client = TestClient(app)
+
+    north_payload = build_payload(
+        message_id="wamid.calendar-norte-1",
+        text="Peluquería",
+    )
+    north_payload["entry"][0]["changes"][0]["value"][
+        "metadata"
+    ]["phone_number_id"] = "phone-norte"
+
+    south_payload = build_payload(
+        message_id="wamid.calendar-sur-1",
+        text="Peluquería",
+    )
+    south_payload["entry"][0]["changes"][0]["value"][
+        "metadata"
+    ]["phone_number_id"] = "phone-sur"
+
+    north_response = post_signed_webhook(
+        client,
+        north_payload,
+    )
+    south_response = post_signed_webhook(
+        client,
+        south_payload,
+    )
+
+    assert north_response.status_code == 200
+    assert south_response.status_code == 200
+    assert calendar_service_factory.calendar_ids == [
+        "calendar-norte",
+        "calendar-sur",
+    ]
+
+    repository.close()
