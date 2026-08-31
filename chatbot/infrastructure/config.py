@@ -29,6 +29,8 @@ class FlowForgeConfig:
     client_id: str = "tarot_alvin"
     booking_database_path: str | None = None
     admin_database_path: str | None = None
+    admin_password: str | None = None
+    admin_session_secret: str | None = None
 
     def __post_init__(
         self,
@@ -138,6 +140,16 @@ class FlowForgeConfig:
             ),
             admin_database_path=(
                 admin_database_path
+            ),
+            admin_password=(
+                _required_environment_variable(
+                    "FLOWFORGE_ADMIN_PASSWORD"
+                )
+            ),
+            admin_session_secret=(
+                _required_environment_variable(
+                    "FLOWFORGE_ADMIN_SESSION_SECRET"
+                )
             ),
         )
 

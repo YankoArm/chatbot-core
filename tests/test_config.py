@@ -338,3 +338,91 @@ def test_admin_database_path_can_be_loaded_from_environment(
     assert config.admin_database_path == (
         "persistent/flowforge-admin.sqlite3"
     )
+@pytest.fixture(autouse=True)
+def _configure_admin_security_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "FLOWFORGE_ADMIN_PASSWORD",
+        "test-admin-password",
+    )
+    monkeypatch.setenv(
+        "FLOWFORGE_ADMIN_SESSION_SECRET",
+        "test-admin-session-secret",
+    )
+
+
+def test_load_admin_security_from_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "FLOWFORGE_PORT",
+        "8000",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_ACCESS_TOKEN",
+        "token",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_PHONE_NUMBER_ID",
+        "phone",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_VERIFY_TOKEN",
+        "verify",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_APP_SECRET",
+        "secret",
+    )
+    monkeypatch.setenv(
+        "FLOWFORGE_ADMIN_PASSWORD",
+        "admin-password",
+    )
+    monkeypatch.setenv(
+        "FLOWFORGE_ADMIN_SESSION_SECRET",
+        "session-secret",
+    )
+
+    config = FlowForgeConfig.load()
+
+    assert config.admin_password == "admin-password"
+    assert config.admin_session_secret == "session-secret"
+
+
+def test_reject_missing_admin_password(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "FLOWFORGE_PORT",
+        "8000",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_ACCESS_TOKEN",
+        "token",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_PHONE_NUMBER_ID",
+        "phone",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_VERIFY_TOKEN",
+        "verify",
+    )
+    monkeypatch.setenv(
+        "WHATSAPP_APP_SECRET",
+        "secret",
+    )
+    monkeypatch.delenv(
+        "FLOWFORGE_ADMIN_PASSWORD",
+        raising=False,
+    )
+
+    with pytest.raises(
+        MissingConfigurationError,
+        match=(
+            "Missing required environment variable: "
+            "FLOWFORGE_ADMIN_PASSWORD"
+        ),
+    ):
+        FlowForgeConfig.load()

@@ -2155,3 +2155,68 @@ def test_admin_client_detail_links_to_bot_status(
         in response.text
     )
     assert "Estado del bot" in response.text
+def test_admin_requires_login_when_credentials_are_configured(
+) -> None:
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        admin_password="test-admin-password",
+        admin_session_secret="test-session-secret",
+    )
+    client = TestClient(app)
+
+    response = client.get(
+        "/admin",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/admin/login"
+    )
+
+
+def test_admin_login_grants_access_to_admin_routes(
+) -> None:
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        admin_password="test-admin-password",
+        admin_session_secret="test-session-secret",
+    )
+    client = TestClient(app)
+
+    login_response = client.post(
+        "/admin/login",
+        data={
+            "password": "test-admin-password",
+        },
+        follow_redirects=False,
+    )
+
+    assert login_response.status_code == 303
+    assert login_response.headers["location"] == "/admin"
+
+    admin_response = client.get("/admin")
+
+    assert admin_response.status_code == 200
+    assert "FlowForge Admin" in admin_response.text
+
+
+def test_admin_login_rejects_invalid_password(
+) -> None:
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        admin_password="test-admin-password",
+        admin_session_secret="test-session-secret",
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/admin/login",
+        data={
+            "password": "incorrect-password",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 401
+    assert "Contraseña incorrecta" in response.text
