@@ -456,6 +456,7 @@ def build_admin_router(
         name: str = "",
         template_id: str = "",
     ) -> str:
+
         error_html = ""
 
         if error is not None:
@@ -550,6 +551,8 @@ def build_admin_router(
         name: str | None = None,
         default_language: str | None = None,
         timezone: str | None = None,
+        whatsapp_phone_number_id: str | None = None,
+        calendar_id: str | None = None,
     ) -> str:
         visible_name = (
             definition.name
@@ -575,6 +578,17 @@ def build_admin_router(
             stored_timezone
             if timezone is None
             else timezone
+        )
+
+        visible_phone_number_id = (
+            definition.whatsapp_phone_number_id
+            if whatsapp_phone_number_id is None
+            else whatsapp_phone_number_id
+        )
+        visible_calendar_id = (
+            definition.calendar_id
+            if calendar_id is None
+            else calendar_id
         )
 
         error_html = ""
@@ -657,6 +671,23 @@ def build_admin_router(
                     >
                 </label>
 
+                <label>
+                    <span>WhatsApp phone number ID</span>
+                    <input
+                        name="whatsapp_phone_number_id"
+                        value="{escape(visible_phone_number_id or "")}"
+                        placeholder="Identificador del número en Meta"
+                    >
+                </label>
+
+                <label>
+                    <span>Google Calendar ID</span>
+                    <input
+                        name="calendar_id"
+                        value="{escape(visible_calendar_id or "")}"
+                        placeholder="primary o identificador del calendario"
+                    >
+                </label>
                 <button
                     class="primary-button"
                     type="submit"
@@ -950,6 +981,20 @@ def build_admin_router(
             )[0].strip()
         )
 
+        whatsapp_phone_number_id = (
+            form_data.get(
+                "whatsapp_phone_number_id",
+                [""],
+            )[0].strip()
+            or None
+        )
+        calendar_id = (
+            form_data.get(
+                "calendar_id",
+                [""],
+            )[0].strip()
+            or None
+        )
         error: str | None = None
 
         if not name:
@@ -977,6 +1022,35 @@ def build_admin_router(
                     "La zona horaria no es válida."
                 )
 
+        if error is None:
+            for existing_definition in (
+                instance_definition_repository.list_all()
+            ):
+                if existing_definition.id == definition.id:
+                    continue
+
+                if (
+                    whatsapp_phone_number_id is not None
+                    and existing_definition
+                    .whatsapp_phone_number_id
+                    == whatsapp_phone_number_id
+                ):
+                    error = (
+                        "El WhatsApp phone number ID ya está "
+                        "asociado a otro bot."
+                    )
+                    break
+
+                if (
+                    calendar_id is not None
+                    and existing_definition.calendar_id
+                    == calendar_id
+                ):
+                    error = (
+                        "El Google Calendar ID ya está asociado "
+                        "a otro bot."
+                    )
+                    break
         if error is not None:
             return HTMLResponse(
                 content=_render_page(
@@ -992,6 +1066,10 @@ def build_admin_router(
                             default_language
                         ),
                         timezone=timezone,
+                        whatsapp_phone_number_id=(
+                            whatsapp_phone_number_id
+                        ),
+                        calendar_id=calendar_id,
                     ),
                 ),
                 status_code=422,
@@ -1021,6 +1099,10 @@ def build_admin_router(
             definition,
             name=name,
             default_language=default_language,
+            whatsapp_phone_number_id=(
+                whatsapp_phone_number_id
+            ),
+            calendar_id=calendar_id,
             settings=settings,
         )
 

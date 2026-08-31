@@ -2273,3 +2273,182 @@ def test_authenticated_admin_post_accepts_same_origin(
     assert response.headers["location"] == (
         "/admin/login"
     )
+def test_admin_updates_tenant_provisioning_identifiers(
+) -> None:
+    repository = SQLiteInstanceDefinitionRepository(
+        database_path=":memory:",
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salón Centro",
+            template_id="hairdressing",
+            default_language="es",
+            supported_languages=[
+                "es",
+                "en",
+            ],
+            settings={
+                "branding": {
+                    "display_name": "Salón Centro",
+                },
+                "booking": {
+                    "timezone": "Europe/Madrid",
+                },
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/admin/clients/salon_centro",
+        data={
+            "name": "Salón Centro",
+            "default_language": "es",
+            "timezone": "Europe/Madrid",
+            "whatsapp_phone_number_id": (
+                "phone-number-centro"
+            ),
+            "calendar_id": "calendar-centro",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+
+    definition = repository.get("salon_centro")
+
+    assert definition is not None
+    assert definition.whatsapp_phone_number_id == (
+        "phone-number-centro"
+    )
+    assert definition.calendar_id == "calendar-centro"
+
+    repository.close()
+def test_admin_rejects_reused_whatsapp_phone_number_id(
+) -> None:
+    repository = SQLiteInstanceDefinitionRepository(
+        database_path=":memory:",
+    )
+
+    for client_id, phone_number_id in (
+        ("salon_norte", "phone-norte"),
+        ("salon_sur", "phone-sur"),
+    ):
+        repository.save(
+            InstanceDefinition(
+                id=client_id,
+                name=client_id.replace("_", " ").title(),
+                template_id="hairdressing",
+                default_language="es",
+                supported_languages=[
+                    "es",
+                    "en",
+                ],
+                whatsapp_phone_number_id=phone_number_id,
+                settings={
+                    "branding": {
+                        "display_name": client_id,
+                    },
+                    "booking": {
+                        "timezone": "Europe/Madrid",
+                    },
+                },
+            )
+        )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/admin/clients/salon_sur",
+        data={
+            "name": "Salón Sur",
+            "default_language": "es",
+            "timezone": "Europe/Madrid",
+            "whatsapp_phone_number_id": "phone-norte",
+            "calendar_id": "calendar-sur",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 422
+    assert "asociado a otro bot" in response.text
+
+    definition = repository.get("salon_sur")
+
+    assert definition is not None
+    assert definition.whatsapp_phone_number_id == (
+        "phone-sur"
+    )
+
+    repository.close()
+def test_admin_rejects_reused_google_calendar_id(
+) -> None:
+    repository = SQLiteInstanceDefinitionRepository(
+        database_path=":memory:",
+    )
+
+    for client_id, calendar_id in (
+        ("salon_norte", "calendar-norte"),
+        ("salon_sur", "calendar-sur"),
+    ):
+        repository.save(
+            InstanceDefinition(
+                id=client_id,
+                name=client_id.replace("_", " ").title(),
+                template_id="hairdressing",
+                default_language="es",
+                supported_languages=[
+                    "es",
+                    "en",
+                ],
+                calendar_id=calendar_id,
+                settings={
+                    "branding": {
+                        "display_name": client_id,
+                    },
+                    "booking": {
+                        "timezone": "Europe/Madrid",
+                    },
+                },
+            )
+        )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/admin/clients/salon_sur",
+        data={
+            "name": "Salón Sur",
+            "default_language": "es",
+            "timezone": "Europe/Madrid",
+            "whatsapp_phone_number_id": "phone-sur",
+            "calendar_id": "calendar-norte",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 422
+    assert "Google Calendar ID ya está asociado" in (
+        response.text
+    )
+
+    definition = repository.get("salon_sur")
+
+    assert definition is not None
+    assert definition.calendar_id == "calendar-sur"
+
+    repository.close()
