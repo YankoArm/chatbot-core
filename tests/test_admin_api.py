@@ -2220,3 +2220,56 @@ def test_admin_login_rejects_invalid_password(
 
     assert response.status_code == 401
     assert "Contraseña incorrecta" in response.text
+def test_authenticated_admin_post_requires_same_origin(
+) -> None:
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        admin_password="test-admin-password",
+        admin_session_secret="test-session-secret",
+    )
+    client = TestClient(app)
+
+    client.post(
+        "/admin/login",
+        data={
+            "password": "test-admin-password",
+        },
+    )
+
+    response = client.post(
+        "/admin/logout",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 403
+    assert "Solicitud no autorizada" in response.text
+
+
+def test_authenticated_admin_post_accepts_same_origin(
+) -> None:
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        admin_password="test-admin-password",
+        admin_session_secret="test-session-secret",
+    )
+    client = TestClient(app)
+
+    client.post(
+        "/admin/login",
+        data={
+            "password": "test-admin-password",
+        },
+    )
+
+    response = client.post(
+        "/admin/logout",
+        headers={
+            "Origin": "http://testserver",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/admin/login"
+    )

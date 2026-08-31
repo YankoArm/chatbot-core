@@ -1,7 +1,10 @@
 from typing import Protocol
 
 from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import (
+    PlainTextResponse,
+    RedirectResponse,
+)
 from starlette.middleware.sessions import (
     SessionMiddleware,
 )
@@ -88,12 +91,29 @@ def build_whatsapp_api(
                 not in {
                     "/admin/login",
                 }
-                and not is_admin_authenticated(request)
             ):
-                return RedirectResponse(
-                    url="/admin/login",
-                    status_code=303,
-                )
+                if not is_admin_authenticated(request):
+                    return RedirectResponse(
+                        url="/admin/login",
+                        status_code=303,
+                    )
+
+                if request.method in {
+                    "POST",
+                    "PUT",
+                    "PATCH",
+                    "DELETE",
+                }:
+                    origin = request.headers.get("origin")
+                    expected_origin = str(
+                        request.base_url
+                    ).rstrip("/")
+
+                    if origin != expected_origin:
+                        return PlainTextResponse(
+                            "Solicitud no autorizada.",
+                            status_code=403,
+                        )
 
             return await call_next(request)
 
