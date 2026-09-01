@@ -20,6 +20,7 @@ from run_flowforge import (
     build_admin_repository,
     build_booking_repository,
     create_app,
+    create_production_app,
 )
 
 
@@ -452,3 +453,33 @@ def test_create_app_seeds_configured_client_when_repository_is_provided(
     )
 
     repository.close()
+
+def test_create_production_app_accepts_admin_configuration(
+    monkeypatch,
+) -> None:
+    def missing_calendar_credentials():
+        raise FileNotFoundError("test: no Google credentials")
+
+    monkeypatch.setattr(
+        "run_flowforge.build_calendar_service_factory",
+        missing_calendar_credentials,
+    )
+
+    config = FlowForgeConfig(
+        whatsapp=WhatsAppConfig(
+            access_token="test-access-token",
+            phone_number_id="test-phone-number-id",
+            verify_token="test-verify-token",
+            app_secret="test-app-secret",
+        ),
+        server=ServerConfig(
+            host="127.0.0.1",
+            port=8000,
+        ),
+        admin_password="test-admin-password",
+        admin_session_secret="test-admin-session-secret",
+    )
+
+    app = create_production_app(config=config)
+
+    assert app is not None

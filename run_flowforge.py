@@ -536,9 +536,6 @@ def create_production_app(
         instance_definition_repository=(
             instance_definition_repository
         ),
-        admin_password=config.admin_password,
-        admin_session_secret=config.admin_session_secret,
-        admin_session_secure=True,
     )
 
 
