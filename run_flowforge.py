@@ -4,6 +4,7 @@ import logging
 from dataclasses import replace
 
 import uvicorn
+from google.auth.exceptions import RefreshError
 from fastapi import FastAPI
 
 from chatbot.api.whatsapp_app import (
@@ -488,7 +489,7 @@ def create_production_app(
             build_calendar_service_factory()
         )
         calendar_service: CalendarService | None = None
-    except FileNotFoundError as error:
+    except (FileNotFoundError, RefreshError) as error:
         logger.warning(
             "Google Calendar credentials are unavailable. "
             "FlowForge will start without booking support: %s",

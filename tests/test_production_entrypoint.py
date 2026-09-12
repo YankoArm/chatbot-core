@@ -483,3 +483,38 @@ def test_create_production_app_accepts_admin_configuration(
     app = create_production_app(config=config)
 
     assert app is not None
+
+
+def test_create_production_app_survives_expired_calendar_token(
+    monkeypatch,
+) -> None:
+    from google.auth.exceptions import RefreshError
+
+    def expired_calendar_token():
+        raise RefreshError("test: token expired or revoked")
+
+    monkeypatch.setattr(
+        "run_flowforge.build_calendar_service_factory",
+        expired_calendar_token,
+    )
+
+    config = FlowForgeConfig(
+        whatsapp=WhatsAppConfig(
+            access_token="test-access-token",
+            phone_number_id="test-phone-number-id",
+            verify_token="test-verify-token",
+            app_secret="test-app-secret",
+        ),
+        server=ServerConfig(
+            host="127.0.0.1",
+            port=8000,
+        ),
+        admin_password="test-admin-password",
+        admin_session_secret="test-admin-session-secret",
+    )
+
+    app = create_production_app(config=config)
+
+    assert app is not None
+    assert "booking" not in app.state.flowforge_instance.capabilities
+    assert app.state.instance_definition_repository is not None
