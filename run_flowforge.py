@@ -429,7 +429,7 @@ def create_app(
         ),
         admin_password=config.admin_password,
         admin_session_secret=config.admin_session_secret,
-        admin_session_secure=True,
+        admin_session_secure=config.admin_session_secure,
     )
 
     app.state.flowforge_instance = instance

@@ -31,6 +31,7 @@ class FlowForgeConfig:
     admin_database_path: str | None = None
     admin_password: str | None = None
     admin_session_secret: str | None = None
+    admin_session_secure: bool = True
 
     def __post_init__(
         self,
@@ -151,6 +152,10 @@ class FlowForgeConfig:
                     "FLOWFORGE_ADMIN_SESSION_SECRET"
                 )
             ),
+            admin_session_secure=_environment_boolean(
+                "FLOWFORGE_ADMIN_SESSION_SECURE",
+                True,
+            ),
         )
 
 
@@ -215,3 +220,24 @@ def _environment_text(
         return default
 
     return raw_value.strip()
+
+def _environment_boolean(
+    name: str,
+    default: bool,
+) -> bool:
+    raw_value = os.getenv(name)
+
+    if raw_value is None or not raw_value.strip():
+        return default
+
+    value = raw_value.strip().lower()
+
+    if value in {"1", "true", "yes", "on"}:
+        return True
+
+    if value in {"0", "false", "no", "off"}:
+        return False
+
+    raise MissingConfigurationError(
+        f"{name} must be a valid boolean"
+    )

@@ -390,6 +390,35 @@ def test_load_admin_security_from_environment(
     assert config.admin_session_secret == "session-secret"
 
 
+def test_admin_session_secure_defaults_to_true(
+    monkeypatch,
+    _configure_admin_security_environment,
+) -> None:
+    monkeypatch.setenv("FLOWFORGE_PORT", "8000")
+    monkeypatch.delenv(
+        "FLOWFORGE_ADMIN_SESSION_SECURE",
+        raising=False,
+    )
+
+    config = FlowForgeConfig.load()
+
+    assert config.admin_session_secure is True
+
+
+def test_admin_session_secure_can_be_disabled_from_environment(
+    monkeypatch,
+    _configure_admin_security_environment,
+) -> None:
+    monkeypatch.setenv("FLOWFORGE_PORT", "8000")
+    monkeypatch.setenv(
+        "FLOWFORGE_ADMIN_SESSION_SECURE",
+        "false",
+    )
+
+    config = FlowForgeConfig.load()
+
+    assert config.admin_session_secure is False
+
 def test_reject_missing_admin_password(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
