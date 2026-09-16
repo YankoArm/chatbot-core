@@ -29,6 +29,7 @@ class FlowForgeConfig:
     client_id: str = "tarot_alvin"
     booking_database_path: str | None = None
     admin_database_path: str | None = None
+    lead_database_path: str | None = None
     admin_password: str | None = None
     admin_session_secret: str | None = None
     admin_session_secure: bool = True
@@ -72,6 +73,22 @@ class FlowForgeConfig:
                 admin_database_path.strip()
             )
 
+        lead_database_path = (
+            self.lead_database_path
+        )
+
+        if (
+            lead_database_path is None
+            or not lead_database_path.strip()
+        ):
+            lead_database_path = (
+                "data/flowforge_leads.sqlite3"
+            )
+        else:
+            lead_database_path = (
+                lead_database_path.strip()
+            )
+
         object.__setattr__(
             self,
             "booking_database_path",
@@ -81,6 +98,11 @@ class FlowForgeConfig:
             self,
             "admin_database_path",
             admin_database_path,
+        )
+        object.__setattr__(
+            self,
+            "lead_database_path",
+            lead_database_path,
         )
 
     @classmethod
@@ -97,6 +119,9 @@ class FlowForgeConfig:
         )
         admin_database_path = os.getenv(
             "FLOWFORGE_ADMIN_DATABASE_PATH"
+        )
+        lead_database_path = os.getenv(
+            "FLOWFORGE_LEAD_DATABASE_PATH"
         )
 
         return cls(
@@ -141,6 +166,9 @@ class FlowForgeConfig:
             ),
             admin_database_path=(
                 admin_database_path
+            ),
+            lead_database_path=(
+                lead_database_path
             ),
             admin_password=(
                 _required_environment_variable(

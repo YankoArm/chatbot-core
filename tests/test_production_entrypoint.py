@@ -518,3 +518,40 @@ def test_create_production_app_survives_expired_calendar_token(
     assert app is not None
     assert "booking" not in app.state.flowforge_instance.capabilities
     assert app.state.instance_definition_repository is not None
+
+def test_build_lead_repository_uses_configured_sqlite_path(
+    tmp_path,
+) -> None:
+    from chatbot.infrastructure.config import (
+        FlowForgeConfig,
+        ServerConfig,
+        WhatsAppConfig,
+    )
+    from chatbot.leads import SQLiteLeadRepository
+    from run_flowforge import build_lead_repository
+
+    database_path = tmp_path / "flowforge-leads.sqlite3"
+
+    config = FlowForgeConfig(
+        whatsapp=WhatsAppConfig(
+            access_token="test-access-token",
+            phone_number_id="test-phone-number-id",
+            verify_token="test-verify-token",
+            app_secret="test-app-secret",
+        ),
+        server=ServerConfig(
+            host="127.0.0.1",
+            port=8000,
+        ),
+        lead_database_path=str(database_path),
+    )
+
+    repository = build_lead_repository(config)
+
+    assert isinstance(
+        repository,
+        SQLiteLeadRepository,
+    )
+    assert database_path.exists()
+
+    repository.close()

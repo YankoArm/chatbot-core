@@ -51,6 +51,7 @@ from chatbot.connectors.whatsapp.signature import (
 from chatbot.infrastructure.config import (
     FlowForgeConfig,
 )
+from chatbot.leads import SQLiteLeadRepository
 from chatbot.instances import (
     InstanceDefinition,
     SQLiteInstanceDefinitionRepository,
@@ -79,6 +80,25 @@ def build_booking_repository(
         )
 
     return SQLiteBookingRepository(
+        database_path=database_path,
+    )
+
+
+def build_lead_repository(
+    config: FlowForgeConfig,
+) -> SQLiteLeadRepository:
+    """
+    Build the persistent repository for captured leads.
+    """
+
+    database_path = config.lead_database_path
+
+    if database_path is None:
+        raise ValueError(
+            "Lead database path is not configured."
+        )
+
+    return SQLiteLeadRepository(
         database_path=database_path,
     )
 
