@@ -1298,6 +1298,12 @@ def _render_client_detail(
     >
         Preguntas frecuentes
     </a>
+    <a
+        class="primary-button"
+        href="/admin/clients/{escape(instance.id)}/leads"
+    >
+        Solicitudes recibidas
+    </a>
     <section class="panel">
         <div class="definition-grid">
             {_render_definition("Plantilla", template_id)}

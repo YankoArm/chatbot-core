@@ -13,6 +13,11 @@ from chatbot.api.admin_auth import (
     build_admin_auth_router,
     is_admin_authenticated,
 )
+from chatbot.api.admin_leads import (
+    build_admin_leads_router,
+)
+from chatbot.leads import LeadRepository
+
 from chatbot.api.admin import (
     InstanceDefinitionRepositoryProtocol,
     build_admin_router,
@@ -60,6 +65,7 @@ def build_whatsapp_api(
     instance_definition_repository: (
         InstanceDefinitionRepositoryProtocol | None
     ) = None,
+    lead_repository: LeadRepository | None = None,
     admin_password: str | None = None,
     admin_session_secret: str | None = None,
     admin_session_secure: bool = False,
@@ -148,6 +154,13 @@ def build_whatsapp_api(
     app.include_router(
         build_admin_router(
             instance_definition_repository
+        )
+    )
+
+    app.include_router(
+        build_admin_leads_router(
+            lead_repository=lead_repository,
+            page_renderer=_render_admin_page,
         )
     )
 

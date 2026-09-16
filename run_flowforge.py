@@ -456,6 +456,7 @@ def create_app(
             config.whatsapp.verify_token
         ),
         signature_verifier=signature_verifier,
+        lead_repository=lead_repository,
         instance_definition_repository=(
             instance_definition_repository
         ),
