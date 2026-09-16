@@ -1,0 +1,66 @@
+{
+  "services": {
+    "keywords": [
+      "que servicios ofreceis",
+      "que servicios ofrecéis",
+      "servicios",
+      "en que podeis ayudar",
+      "en qué podéis ayudar",
+      "what services do you offer",
+      "what can you help with",
+      "services"
+    ],
+    "answers": {
+      "es": "Ofrecemos asesoramiento, gestión de proyectos y servicios personalizados. Cuéntanos qué necesitas y una persona del equipo podrá orientarte.",
+      "en": "We provide consulting, project management and tailored services. Tell us what you need and a member of our team can guide you."
+    }
+  },
+  "quotes": {
+    "keywords": [
+      "quiero un presupuesto",
+      "pedir presupuesto",
+      "cuanto cuesta",
+      "cuánto cuesta",
+      "precio",
+      "presupuesto",
+      "i need a quote",
+      "request a quote",
+      "how much does it cost",
+      "price"
+    ],
+    "answers": {
+      "es": "Preparamos presupuestos personalizados según las necesidades de cada proyecto. Cuéntanos brevemente qué necesitas o pide hablar con una persona para que el equipo te contacte.",
+      "en": "We prepare tailored quotes based on each project's needs. Briefly tell us what you need or ask to speak with a person so our team can contact you."
+    }
+  },
+  "process": {
+    "keywords": [
+      "como trabajais",
+      "cómo trabajáis",
+      "cual es el proceso",
+      "cuál es el proceso",
+      "how do you work",
+      "what is the process"
+    ],
+    "answers": {
+      "es": "Primero entendemos tu necesidad, después proponemos una solución y un presupuesto, y te acompañamos durante todo el proceso.",
+      "en": "First we understand your needs, then we propose a solution and a quote, and we support you throughout the whole process."
+    }
+  },
+  "service_area": {
+    "keywords": [
+      "donde trabajais",
+      "dónde trabajáis",
+      "zona de servicio",
+      "trabajais en madrid",
+      "trabajáis en madrid",
+      "where do you work",
+      "service area",
+      "do you work in madrid"
+    ],
+    "answers": {
+      "es": "Trabajamos principalmente en Madrid y también valoramos proyectos a distancia. Cuéntanos dónde necesitas el servicio y te orientamos.",
+      "en": "We mainly work in Madrid and also consider remote projects. Tell us where you need the service and we will guide you."
+    }
+  }
+}

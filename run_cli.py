@@ -74,37 +74,35 @@ def main(
         arguments.client,
     )
 
-    booking_configuration = (
-        build_booking_configuration(
-            instance
-        )
-    )
-
-    calendar_service = build_calendar_service()
-
-    booking_database_path = (
-        arguments.booking_database
-        or (
-            f"data/"
-            f"{instance.id}_bookings.sqlite3"
-        )
-    )
-
-    booking_repository = (
-        SQLiteBookingRepository(
-            database_path=booking_database_path,
-        )
-    )
+    capability_factories = {}
+    booking_repository = None
+    booking_database_path = None
 
     try:
-        booking_service = BookingService(
-            repository=booking_repository,
-            calendar_service=calendar_service,
-        )
-
-        bootstrap = Bootstrap(
-            capability_factories={
-                "booking": lambda: BookingCapability(
+        if "booking" in instance.capabilities:
+            booking_configuration = (
+                build_booking_configuration(
+                    instance
+                )
+            )
+            calendar_service = (
+                build_calendar_service()
+            )
+            booking_database_path = (
+                arguments.booking_database
+                or f"data/{instance.id}_bookings.sqlite3"
+            )
+            booking_repository = (
+                SQLiteBookingRepository(
+                    database_path=booking_database_path,
+                )
+            )
+            booking_service = BookingService(
+                repository=booking_repository,
+                calendar_service=calendar_service,
+            )
+            capability_factories["booking"] = (
+                lambda: BookingCapability(
                     booking_service=booking_service,
                     business_hours=(
                         booking_configuration.business_hours
@@ -115,38 +113,33 @@ def main(
                     services=(
                         booking_configuration.services
                     ),
-                ),
-            },
-        )
+                )
+            )
 
+        bootstrap = Bootstrap(
+            capability_factories=capability_factories,
+        )
         application = bootstrap.build_from_instance(
             instance,
         )
-
         application_channel = ApplicationChannel(
             application,
         )
-
-        cli = CLIChannel(
-            application_channel,
-        )
+        cli = CLIChannel(application_channel)
 
         print("=" * 50)
-        print(
-            f" FlowForge CLI - {instance.name}"
-        )
+        print(f" FlowForge CLI - {instance.name}")
         print("=" * 50)
         print(f"Client: {instance.id}")
-        print(
-            "Google Calendar integration enabled."
-        )
-        print(
-            "Client booking configuration loaded."
-        )
-        print(
-            "Booking database: "
-            f"{booking_database_path}"
-        )
+
+        if "booking" in instance.capabilities:
+            print("Google Calendar integration enabled.")
+            print("Client booking configuration loaded.")
+            print(
+                "Booking database: "
+                f"{booking_database_path}"
+            )
+
         print(
             "Type 'exit', 'quit' or 'salir' to close."
         )
@@ -154,7 +147,8 @@ def main(
 
         cli.run()
     finally:
-        booking_repository.close()
+        if booking_repository is not None:
+            booking_repository.close()
 
 
 if __name__ == "__main__":

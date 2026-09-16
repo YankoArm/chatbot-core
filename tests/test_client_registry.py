@@ -16,6 +16,7 @@ from chatbot.instances import InstanceDefinition
 def test_list_client_ids():
     assert list_client_ids() == [
         "hairdressing_demo",
+        "professional_services_demo",
         "tarot_alvin",
     ]
 
@@ -23,6 +24,7 @@ def test_list_client_ids():
 def test_list_template_ids():
     assert list_template_ids() == [
         "hairdressing",
+        "professional_services",
         "tarot",
     ]
 
@@ -34,6 +36,11 @@ def test_list_template_ids():
             "hairdressing_demo",
             "Salón Estilo",
             "hairdressing",
+        ),
+        (
+            "professional_services_demo",
+            "Nexo Servicios",
+            "professional_services",
         ),
         (
             "tarot_alvin",

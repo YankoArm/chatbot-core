@@ -1,6 +1,6 @@
 import pytest
 
-from run_cli import build_argument_parser
+from run_cli import build_argument_parser, main
 
 
 def test_cli_uses_tarot_alvin_by_default():
@@ -58,3 +58,44 @@ def test_cli_accepts_custom_booking_database():
     assert arguments.booking_database == (
         "persistent/demo.sqlite3"
     )
+
+def test_cli_runs_professional_services_demo_without_booking(
+    monkeypatch,
+    capsys,
+):
+    class FakeCLIChannel:
+        def __init__(
+            self,
+            application_channel,
+        ) -> None:
+            self.application_channel = application_channel
+
+        def run(self) -> None:
+            pass
+
+    def calendar_must_not_be_built():
+        raise AssertionError(
+            "Calendar must not be built without booking"
+        )
+
+    monkeypatch.setattr(
+        "run_cli.CLIChannel",
+        FakeCLIChannel,
+    )
+    monkeypatch.setattr(
+        "run_cli.build_calendar_service",
+        calendar_must_not_be_built,
+    )
+
+    main(
+        [
+            "--client",
+            "professional_services_demo",
+        ]
+    )
+
+    output = capsys.readouterr().out
+
+    assert "FlowForge CLI - Nexo Servicios" in output
+    assert "Google Calendar integration enabled." not in output
+    assert "Client booking configuration loaded." not in output

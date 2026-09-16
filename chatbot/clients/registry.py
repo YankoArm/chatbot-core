@@ -1,15 +1,21 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from collections.abc import Callable
 
 from chatbot.business_templates.hairdressing import (
     create_hairdressing_template,
 )
+from chatbot.business_templates.professional_services import (
+    create_professional_services_template,
+)
 from chatbot.business_templates.tarot import (
     create_tarot_template,
 )
 from chatbot.clients.hairdressing_demo import (
     create_hairdressing_demo_definition,
+)
+from chatbot.clients.professional_services_demo import (
+    create_professional_services_demo_definition,
 )
 from chatbot.clients.tarot_alvin import (
     create_tarot_alvin_definition,
@@ -47,6 +53,9 @@ _TEMPLATE_REGISTRY: dict[
     "hairdressing": (
         create_hairdressing_template
     ),
+    "professional_services": (
+        create_professional_services_template
+    ),
     "tarot": create_tarot_template,
 }
 
@@ -57,6 +66,9 @@ _CLIENT_DEFINITION_REGISTRY: dict[
 ] = {
     "hairdressing_demo": (
         create_hairdressing_demo_definition
+    ),
+    "professional_services_demo": (
+        create_professional_services_demo_definition
     ),
     "tarot_alvin": (
         create_tarot_alvin_definition
