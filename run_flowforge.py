@@ -204,6 +204,7 @@ def build_tenant_application(
     definition: InstanceDefinition,
     calendar_service: CalendarService | None,
     booking_repository: BookingRepository | None,
+    lead_repository: LeadRepository | None = None,
 ) -> object:
     """
     Build the isolated runtime application for one stored client.
@@ -258,6 +259,13 @@ def build_tenant_application(
 
     return Bootstrap(
         capability_factories=capability_factories,
+        pending_action_dispatcher=(
+            LeadCaptureActionDispatcher(
+                repository=lead_repository,
+            )
+            if lead_repository is not None
+            else None
+        ),
     ).build_from_instance(
         instance
     )
@@ -419,6 +427,7 @@ def create_app(
                         booking_repository=(
                             active_booking_repository
                         ),
+                        lead_repository=lead_repository,
                     )
                 ),
             )
