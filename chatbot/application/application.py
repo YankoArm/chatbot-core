@@ -40,6 +40,7 @@ class FlowForgeApplication:
     connector_manager: Any | None = None
     language_detector: BaseLanguageDetector | None = None
     context_factory: ConversationContextFactory | None = None
+    pending_action_dispatcher: Any | None = None
 
     def chat(
         self,
@@ -90,10 +91,45 @@ class FlowForgeApplication:
             message=normalized_message,
         )
 
-        return self.orchestrator.process(
+        response = self.orchestrator.process(
             context=context,
             message=normalized_message,
         )
+
+        self._dispatch_pending_actions(
+            context=context,
+            session_id=normalized_session_id,
+        )
+
+        return response
+
+    def _dispatch_pending_actions(
+        self,
+        *,
+        context: Any,
+        session_id: str,
+    ) -> None:
+        dispatcher = self.pending_action_dispatcher
+
+        if dispatcher is None:
+            return
+
+        remaining_actions: list[dict] = []
+
+        for action in context.pending_actions:
+            try:
+                handled = dispatcher.dispatch(
+                    instance=self.instance,
+                    session_id=session_id,
+                    action=action,
+                )
+            except Exception:
+                handled = False
+
+            if not handled:
+                remaining_actions.append(action)
+
+        context.pending_actions[:] = remaining_actions
 
     def reset_session(
         self,

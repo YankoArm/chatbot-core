@@ -1,4 +1,7 @@
-﻿from chatbot.leads.models import Lead
+﻿from chatbot.leads.action_dispatcher import (
+    LeadCaptureActionDispatcher,
+)
+from chatbot.leads.models import Lead
 from chatbot.leads.repository import LeadRepository
 from chatbot.leads.sqlite_repository import (
     SQLiteLeadRepository,
@@ -6,6 +9,7 @@ from chatbot.leads.sqlite_repository import (
 
 __all__ = [
     "Lead",
+    "LeadCaptureActionDispatcher",
     "LeadRepository",
     "SQLiteLeadRepository",
 ]
