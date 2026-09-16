@@ -32,6 +32,7 @@ def test_bootstrap_builds_professional_services_demo():
         "lead_capture",
         "human_transfer",
     ]
+    assert app.instance.activation.type == "always_active"
     assert app.instance.knowledge_path == (
         "knowledge/professional_services_demo"
     )
@@ -49,13 +50,8 @@ def test_bootstrap_builds_professional_services_demo():
     )
 
 
-def test_professional_services_demo_answers_faq():
+def test_professional_services_demo_answers_faq_without_activation_phrase():
     app = build_professional_services_demo_application()
-
-    app.chat(
-        session_id="professional-services-faq",
-        message="Servicios",
-    )
 
     response = app.chat(
         session_id="professional-services-faq",
@@ -71,14 +67,9 @@ def test_professional_services_demo_answers_faq():
     assert response.metadata["answer_found"] is True
 
 
-def test_professional_services_demo_captures_lead_before_transfer():
+def test_professional_services_demo_captures_lead_without_activation_phrase():
     app = build_professional_services_demo_application()
     session_id = "professional-services-lead"
-
-    app.chat(
-        session_id=session_id,
-        message="Servicios",
-    )
 
     start_response = app.chat(
         session_id=session_id,

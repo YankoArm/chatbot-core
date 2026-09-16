@@ -22,30 +22,7 @@ def create_professional_services_demo_definition() -> InstanceDefinition:
                 "display_name": "Nexo Servicios",
             },
         },
-        activation=ActivationConfig(
-            type="exact_phrase",
-            phrases=[
-                "servicios",
-                "nexo servicios",
-            ],
-            prompt_message=(
-                "Hola, estás hablando con el asistente "
-                "automático de Nexo Servicios.\n\n"
-                "Para iniciar la demostración, escribe SERVICIOS."
-            ),
-            activated_message=(
-                "Demostración de servicios profesionales "
-                "activada correctamente.\n\n"
-                "Puedo ayudarte con:\n"
-                "• Resolver dudas sobre los servicios\n"
-                "• Explicar cómo trabajamos\n"
-                "• Orientarte sobre presupuestos\n"
-                "• Hablar con una persona\n\n"
-                "Escríbeme directamente qué necesitas."
-            ),
-            prompt_cooldown=60,
-            session_timeout=3600,
-        ),
+        activation=ActivationConfig(),
         metadata={
             "owner": "Demo comercial de FlowForge",
             "business_type": "professional_services",
