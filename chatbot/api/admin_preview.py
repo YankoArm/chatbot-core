@@ -365,6 +365,7 @@ def _render_preview_page(
         <div class="preview-conversation">
             {_render_turns(messages, responses)}
         </div>
+        {_render_preview_suggestions(definition)}
         <form
             class="admin-form"
             method="post"
@@ -378,6 +379,7 @@ def _render_preview_page(
             <label>
                 <span>Mensaje de prueba</span>
                 <input
+                    id="preview-message"
                     name="message"
                     placeholder="Escribe como si fueras un cliente"
                     autocomplete="off"
@@ -392,6 +394,77 @@ def _render_preview_page(
             </button>
         </form>
     </section>
+    """
+
+
+def _render_preview_suggestions(
+    definition: InstanceDefinition,
+) -> str:
+    capabilities = build_instance_from_definition(
+        definition
+    ).capabilities
+
+    suggestions = [
+        "Hola",
+    ]
+
+    if "faq" in capabilities:
+        suggestions.append(
+            "¿Qué servicios ofrecéis?"
+        )
+
+    if "human_transfer" in capabilities:
+        suggestions.append(
+            "Quiero hablar con una persona"
+        )
+
+    buttons = "".join(
+        (
+            '<button '
+            'class="tag preview-suggestion" '
+            'type="button" '
+            'data-preview-message="'
+            f'{escape(message, quote=True)}">'
+            f"{escape(message)}"
+            "</button>"
+        )
+        for message in suggestions
+    )
+
+    return f"""
+    <div class="tags preview-suggestions">
+        {buttons}
+    </div>
+    <script>
+        (() => {{
+            const conversation = document.querySelector(
+                ".preview-conversation"
+            );
+
+            if (
+                conversation &&
+                conversation.querySelector(".definition")
+            ) {{
+                conversation.scrollIntoView({{
+                    block: "end",
+                }});
+            }}
+
+            const input = document.querySelector(
+                "#preview-message"
+            );
+            const form = input?.form;
+
+            document.querySelectorAll(
+                ".preview-suggestion"
+            ).forEach((button) => {{
+                button.addEventListener("click", () => {{
+                    input.value = button.dataset.previewMessage;
+                    form.requestSubmit();
+                }});
+            }});
+        }})();
+    </script>
     """
 
 

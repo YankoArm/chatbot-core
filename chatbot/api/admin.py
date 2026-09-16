@@ -369,6 +369,21 @@ h1 {
     color: #fecaca;
     background: rgba(127, 29, 29, 0.18);
 }
+.preview-suggestions {
+    margin: 18px 0 8px;
+}
+
+.preview-suggestion {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    cursor: pointer;
+    font: inherit;
+}
+
+.preview-suggestion:hover {
+    color: #ffffff;
+    background: rgba(46, 196, 182, 0.18);
+}
+
 .empty {
     color: #71849c;
 }
