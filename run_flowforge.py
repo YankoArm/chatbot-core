@@ -270,7 +270,8 @@ def create_app(
     graph_client: WhatsAppGraphClientProtocol,
     graph_client_provider: object | None = None,
     booking_repository: BookingRepository | None = None,
-    lead_repository: LeadRepository | None = None,    instance_definition_repository: (
+    lead_repository: LeadRepository | None = None,
+    instance_definition_repository: (
         SQLiteInstanceDefinitionRepository | None
     ) = None,
 ) -> FastAPI:
@@ -566,6 +567,10 @@ def create_production_app(
         else None
     )
 
+    lead_repository = build_lead_repository(
+        config
+    )
+
     instance_definition_repository = (
         build_admin_repository(
             config
@@ -579,6 +584,7 @@ def create_production_app(
         graph_client=graph_client,
         graph_client_provider=graph_client_provider,
         booking_repository=booking_repository,
+        lead_repository=lead_repository,
         instance_definition_repository=(
             instance_definition_repository
         ),
