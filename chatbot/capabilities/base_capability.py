@@ -16,6 +16,16 @@ class BaseCapability(ABC):
     interrupts_active_flow: bool = False
     preserves_active_flow: bool = False
 
+    def has_active_flow(
+        self,
+        context: Any,
+    ) -> bool:
+        """
+        Return whether this capability owns an unfinished flow.
+        """
+
+        return False
+
     def register(self, context: dict[str, Any]) -> None:
         """
         Register flows, actions, connectors or configuration needed by this capability.

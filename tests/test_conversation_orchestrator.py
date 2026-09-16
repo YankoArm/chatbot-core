@@ -1,6 +1,8 @@
+from chatbot.capabilities.base_capability import BaseCapability
 from chatbot.capabilities.booking.capability import BookingCapability
 from chatbot.capabilities.capability_manager import CapabilityManager
 from chatbot.conversation import ConversationContext, ConversationOrchestrator
+from chatbot.responses import Response
 
 
 def test_orchestrator_selects_matching_capability():
@@ -122,3 +124,80 @@ def test_orchestrator_continues_active_booking_management_flow(
     assert response.metadata["handled"] is True
     assert "ninguna cita activa" in response.text.lower()
     assert context.booking_management is not None
+
+class ExampleActiveFlowCapability(BaseCapability):
+    name = "example_active_flow"
+
+    def can_handle(
+        self,
+        context,
+        message: str,
+    ) -> bool:
+        return message == "iniciar flujo"
+
+    def has_active_flow(
+        self,
+        context,
+    ) -> bool:
+        return context.get_variable(
+            "example_active_flow_pending",
+            False,
+        )
+
+    def handle(
+        self,
+        context,
+        message: str,
+    ) -> Response:
+        if self.has_active_flow(context):
+            context.remove_variable(
+                "example_active_flow_pending"
+            )
+            context.clear_active_capability()
+
+            return Response(
+                text=f"Valor recibido: {message}",
+                metadata={
+                    "capability": self.name,
+                    "handled": True,
+                },
+            )
+
+        context.set_variable(
+            "example_active_flow_pending",
+            True,
+        )
+
+        return Response(
+            text="Indícame un valor.",
+            metadata={
+                "capability": self.name,
+                "handled": True,
+            },
+        )
+
+
+def test_orchestrator_continues_any_active_capability_flow():
+    manager = CapabilityManager()
+    manager.register(ExampleActiveFlowCapability())
+
+    orchestrator = ConversationOrchestrator(manager)
+    context = ConversationContext(
+        session_id="generic-active-flow",
+    )
+
+    start_response = orchestrator.process(
+        context=context,
+        message="iniciar flujo",
+    )
+    response = orchestrator.process(
+        context=context,
+        message="dato de prueba",
+    )
+
+    assert start_response.text == "Indícame un valor."
+    assert response.text == "Valor recibido: dato de prueba"
+    assert response.metadata["capability"] == (
+        "example_active_flow"
+    )
+    assert context.active_capability is None

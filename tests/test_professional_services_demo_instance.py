@@ -25,30 +25,25 @@ def test_bootstrap_builds_professional_services_demo():
     assert app.instance.template_id == (
         "professional_services"
     )
-
     assert app.instance.capabilities == [
         "greeting",
         "faq",
         "help",
+        "lead_capture",
         "human_transfer",
     ]
-
     assert app.instance.knowledge_path == (
         "knowledge/professional_services_demo"
     )
-
     assert app.instance.settings["business_type"] == (
         "professional_services"
     )
-
     assert app.instance.settings["branding"]["display_name"] == (
         "Nexo Servicios"
     )
-
     assert app.instance.metadata["category"] == (
         "professional_services"
     )
-
     assert app.instance.metadata["owner"] == (
         "Demo comercial de FlowForge"
     )
@@ -76,23 +71,47 @@ def test_professional_services_demo_answers_faq():
     assert response.metadata["answer_found"] is True
 
 
-def test_professional_services_demo_allows_human_transfer():
+def test_professional_services_demo_captures_lead_before_transfer():
     app = build_professional_services_demo_application()
+    session_id = "professional-services-lead"
 
     app.chat(
-        session_id="professional-services-transfer",
+        session_id=session_id,
         message="Servicios",
     )
 
-    response = app.chat(
-        session_id="professional-services-transfer",
+    start_response = app.chat(
+        session_id=session_id,
         message="Quiero hablar con una persona",
     )
-
-    assert response.text == (
-        "De acuerdo. Voy a solicitar que una persona "
-        "continúe la conversación contigo."
+    name_response = app.chat(
+        session_id=session_id,
+        message="Yanko",
     )
-    assert response.metadata["capability"] == "human_transfer"
-    assert response.metadata["human_transfer_requested"] is True
-    assert response.metadata["transfer_registered"] is True
+    phone_response = app.chat(
+        session_id=session_id,
+        message="600123123",
+    )
+    final_response = app.chat(
+        session_id=session_id,
+        message="Necesito un presupuesto.",
+    )
+
+    assert start_response.metadata["capability"] == (
+        "lead_capture"
+    )
+    assert start_response.text == (
+        "Para que una persona pueda ayudarte mejor, "
+        "¿cómo te llamas?"
+    )
+    assert name_response.text == (
+        "Gracias, Yanko. ¿Cuál es tu número de teléfono?"
+    )
+    assert phone_response.text == (
+        "Perfecto. Cuéntame brevemente qué necesitas."
+    )
+    assert final_response.metadata["lead_captured"] is True
+    assert (
+        final_response.metadata["human_transfer_requested"]
+        is True
+    )

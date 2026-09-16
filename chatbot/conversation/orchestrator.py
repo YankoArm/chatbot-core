@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from chatbot.booking import BookingStep
 from chatbot.capabilities.capability_manager import CapabilityManager
 from chatbot.conversation.context import ConversationContext
 from chatbot.language.detector import BaseLanguageDetector
@@ -200,32 +199,28 @@ class ConversationOrchestrator:
         context: ConversationContext,
     ) -> bool:
         """
-        Return whether the context contains an active unfinished flow.
-
-        Booking can represent either creation of a new appointment or
-        management of an existing one. Both states preserve control of
-        subsequent structured messages such as phones, dates and times.
+        Return whether the active capability owns an unfinished flow.
         """
 
-        if context.active_capability != "booking":
+        active_capability_name = (
+            context.active_capability
+        )
+
+        if active_capability_name is None:
             return False
 
-        booking_is_active = (
-            context.booking is not None
-            and context.booking.next_step
-            is not BookingStep.COMPLETE
+        active_capability = (
+            self.capability_manager.get(
+                active_capability_name
+            )
         )
 
-        management_is_active = (
-            context.booking_management is not None
-            and not context.booking_management.completed
-        )
+        if active_capability is None:
+            return False
 
-        return (
-            booking_is_active
-            or management_is_active
+        return active_capability.has_active_flow(
+            context
         )
-
     def _delegate_message(
         self,
         context: ConversationContext,

@@ -637,6 +637,36 @@ class BookingCapability(BaseCapability):
         if "booking_flow" not in context["flows"]:
             context["flows"].append("booking_flow")
 
+    def has_active_flow(
+        self,
+        context: Any,
+    ) -> bool:
+        booking = getattr(
+            context,
+            "booking",
+            None,
+        )
+        booking_is_active = (
+            booking is not None
+            and booking.next_step
+            is not BookingStep.COMPLETE
+        )
+
+        booking_management = getattr(
+            context,
+            "booking_management",
+            None,
+        )
+        management_is_active = (
+            booking_management is not None
+            and not booking_management.completed
+        )
+
+        return (
+            booking_is_active
+            or management_is_active
+        )
+
     def can_handle(
         self,
         context: Any,

@@ -28,6 +28,7 @@ def create_professional_services_template() -> TemplateDefinition:
             "greeting",
             "faq",
             "help",
+            "lead_capture",
             "human_transfer",
         ],
         connectors=[],
@@ -37,6 +38,9 @@ def create_professional_services_template() -> TemplateDefinition:
                 "enabled": True,
             },
             "help": {
+                "enabled": True,
+            },
+            "lead_capture": {
                 "enabled": True,
             },
             "human_transfer": {
