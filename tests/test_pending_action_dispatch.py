@@ -200,3 +200,21 @@ def test_application_keeps_unhandled_pending_actions():
             "reason": "Necesito un presupuesto.",
         }
     ]
+
+
+def test_bootstrap_passes_pending_action_dispatcher_to_application():
+    from chatbot.application import Bootstrap
+    from chatbot.instances import Instance
+
+    dispatcher = object()
+
+    application = Bootstrap(
+        pending_action_dispatcher=dispatcher,
+    ).build_from_instance(
+        Instance(
+            id="dispatcher-test",
+            name="Dispatcher Test",
+        )
+    )
+
+    assert application.pending_action_dispatcher is dispatcher

@@ -51,7 +51,11 @@ from chatbot.connectors.whatsapp.signature import (
 from chatbot.infrastructure.config import (
     FlowForgeConfig,
 )
-from chatbot.leads import SQLiteLeadRepository
+from chatbot.leads import (
+    LeadCaptureActionDispatcher,
+    LeadRepository,
+    SQLiteLeadRepository,
+)
 from chatbot.instances import (
     InstanceDefinition,
     SQLiteInstanceDefinitionRepository,
@@ -266,7 +270,7 @@ def create_app(
     graph_client: WhatsAppGraphClientProtocol,
     graph_client_provider: object | None = None,
     booking_repository: BookingRepository | None = None,
-    instance_definition_repository: (
+    lead_repository: LeadRepository | None = None,    instance_definition_repository: (
         SQLiteInstanceDefinitionRepository | None
     ) = None,
 ) -> FastAPI:
@@ -350,8 +354,14 @@ def create_app(
 
     bootstrap = Bootstrap(
         capability_factories=capability_factories,
+        pending_action_dispatcher=(
+            LeadCaptureActionDispatcher(
+                repository=lead_repository,
+            )
+            if lead_repository is not None
+            else None
+        ),
     )
-
     application = bootstrap.build_from_instance(
         instance,
     )
@@ -457,6 +467,7 @@ def create_app(
     app.state.booking_repository = (
         active_booking_repository
     )
+    app.state.lead_repository = lead_repository
     app.state.instance_definition_repository = (
         instance_definition_repository
     )
@@ -473,6 +484,20 @@ def create_app(
         app.router.add_event_handler(
             "shutdown",
             close_booking_repository,
+        )
+
+    close_lead_repository = getattr(
+        lead_repository,
+        "close",
+        None,
+    )
+
+    if callable(
+        close_lead_repository
+    ):
+        app.router.add_event_handler(
+            "shutdown",
+            close_lead_repository,
         )
 
     close_instance_repository = getattr(

@@ -64,6 +64,7 @@ class Bootstrap:
         capability_factories: (
             Mapping[str, CapabilityFactory] | None
         ) = None,
+        pending_action_dispatcher: Any | None = None,
         knowledge_root: str | Path = "knowledge",
     ) -> None:
         self._capability_registry = (
@@ -95,6 +96,9 @@ class Bootstrap:
 
         self._capability_factories = self._normalize_capability_factories(
             capability_factories
+        )
+        self._pending_action_dispatcher = (
+            pending_action_dispatcher
         )
 
     def build(
@@ -141,6 +145,9 @@ class Bootstrap:
             connector_manager=connector_manager,
             language_detector=selected_language_detector,
             context_factory=selected_context_factory,
+            pending_action_dispatcher=(
+                self._pending_action_dispatcher
+            ),
         )
 
     def build_from_instance(

@@ -555,3 +555,35 @@ def test_build_lead_repository_uses_configured_sqlite_path(
     assert database_path.exists()
 
     repository.close()
+
+
+def test_create_app_uses_provided_lead_repository() -> None:
+    from chatbot.leads import SQLiteLeadRepository
+
+    lead_repository = SQLiteLeadRepository(
+        database_path=":memory:",
+    )
+
+    config = FlowForgeConfig(
+        whatsapp=WhatsAppConfig(
+            access_token="test-access-token",
+            phone_number_id="test-phone-number-id",
+            verify_token="test-verify-token",
+            app_secret="test-app-secret",
+        ),
+        server=ServerConfig(
+            host="127.0.0.1",
+            port=8000,
+        ),
+    )
+
+    app = create_app(
+        config=config,
+        calendar_service=FakeCalendarService(),
+        graph_client=FakeWhatsAppGraphClient(),
+        lead_repository=lead_repository,
+    )
+
+    assert app.state.lead_repository is lead_repository
+
+    lead_repository.close()
