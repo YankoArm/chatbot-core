@@ -14,7 +14,10 @@ _FALLBACK_RESPONSES = {
             "¿En qué puedo ayudarte?"
         ),
         "unhandled": (
-            "Lo siento, no sé cómo gestionar esa solicitud."
+            "No he entendido del todo lo que necesitas. "
+            "Puedes explicármelo de otra forma o escribir «ayuda» "
+            "para ver en qué puedo ayudarte. Si lo prefieres, "
+            "también puedes pedir hablar con una persona."
         ),
     },
     Language.EN: {
@@ -23,7 +26,10 @@ _FALLBACK_RESPONSES = {
             "How can I help you?"
         ),
         "unhandled": (
-            "I'm sorry, I don't know how to handle that request."
+            "I did not quite understand what you need. "
+            "You can explain it another way or write “help” "
+            "to see what I can do. If you prefer, you can "
+            "also ask to speak with a person."
         ),
     },
 }

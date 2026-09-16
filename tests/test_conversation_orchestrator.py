@@ -201,3 +201,22 @@ def test_orchestrator_continues_any_active_capability_flow():
         "example_active_flow"
     )
     assert context.active_capability is None
+
+def test_unhandled_message_guides_the_user_to_available_help():
+    orchestrator = ConversationOrchestrator(
+        capability_manager=CapabilityManager(),
+    )
+    context = ConversationContext(session_id="fallback-test")
+
+    response = orchestrator.process(
+        context=context,
+        message="Necesito algo completamente distinto",
+    )
+
+    assert response.text == (
+        "No he entendido del todo lo que necesitas. "
+        "Puedes explicármelo de otra forma o escribir «ayuda» "
+        "para ver en qué puedo ayudarte. Si lo prefieres, "
+        "también puedes pedir hablar con una persona."
+    )
+    assert response.metadata["handled"] is False
