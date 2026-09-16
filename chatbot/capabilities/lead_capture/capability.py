@@ -6,6 +6,10 @@ from typing import Any
 
 from chatbot.capabilities.base_capability import BaseCapability
 from chatbot.language import Language
+from chatbot.phone import (
+    PhoneNumberError,
+    PhoneNumberService,
+)
 from chatbot.responses import Response
 
 
@@ -38,6 +42,19 @@ class LeadCaptureCapability(BaseCapability):
     name = "lead_capture"
     version = "1.0"
     dependencies: list[str] = []
+
+    def __init__(
+        self,
+        phone_number_service: (
+            PhoneNumberService | None
+        ) = None,
+    ) -> None:
+        self._phone_number_service = (
+            phone_number_service
+            or PhoneNumberService(
+                default_region="ES",
+            )
+        )
 
     def can_handle(
         self,
@@ -98,7 +115,22 @@ class LeadCaptureCapability(BaseCapability):
             )
 
         if step == "phone":
-            state["phone"] = value
+            try:
+                phone = self._phone_number_service.normalize(
+                    value,
+                )
+            except PhoneNumberError:
+                return self._response(
+                    context=context,
+                    text=(
+                        "No parece un número de teléfono válido. "
+                        "Inténtalo de nuevo, incluyendo el prefijo "
+                        "si lo necesitas."
+                    ),
+                    step="phone",
+                )
+
+            state["phone"] = phone
             state["step"] = "reason"
             context.set_variable(_STATE_KEY, state)
 

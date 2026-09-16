@@ -1,4 +1,4 @@
-﻿from chatbot.capabilities.capability_manager import (
+from chatbot.capabilities.capability_manager import (
     CapabilityManager,
 )
 from chatbot.capabilities.lead_capture import (
@@ -79,7 +79,7 @@ def test_lead_capture_collects_contact_and_requests_transfer():
             "type": "lead_capture",
             "status": "captured",
             "name": "Yanko",
-            "phone": "600123123",
+            "phone": "+34600123123",
             "reason": (
                 "Necesito información para un proyecto "
                 "de automatización."
@@ -94,3 +94,34 @@ def test_lead_capture_collects_contact_and_requests_transfer():
             ),
         },
     ]
+
+
+def test_lead_capture_rejects_invalid_phone_number():
+    orchestrator, context = (
+        build_lead_capture_conversation()
+    )
+
+    orchestrator.process(
+        context=context,
+        message="Quiero hablar con una persona",
+    )
+    orchestrator.process(
+        context=context,
+        message="Yanko",
+    )
+
+    response = orchestrator.process(
+        context=context,
+        message="no tengo teléfono",
+    )
+
+    assert response.text == (
+        "No parece un número de teléfono válido. "
+        "Inténtalo de nuevo, incluyendo el prefijo si lo necesitas."
+    )
+    assert response.metadata["lead_capture_step"] == "phone"
+    assert context.active_capability == "lead_capture"
+    assert context.get_variable("lead_capture") == {
+        "step": "phone",
+        "name": "Yanko",
+    }
