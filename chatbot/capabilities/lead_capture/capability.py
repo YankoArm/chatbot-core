@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import re
 import unicodedata
@@ -99,6 +99,29 @@ class LeadCaptureCapability(BaseCapability):
 
         step = state["step"]
         value = message.strip()
+
+        if self._normalize_text(value) in {
+            "cancelar",
+            "salir",
+            "no",
+            "cancel",
+            "exit",
+            "stop",
+        }:
+            context.remove_variable(_STATE_KEY)
+            context.clear_active_capability()
+
+            return Response(
+                text=(
+                    "De acuerdo. He cancelado la solicitud "
+                    "de atención."
+                ),
+                metadata={
+                    "capability": self.name,
+                    "handled": True,
+                    "lead_capture_cancelled": True,
+                },
+            )
 
         if step == "name":
             state["name"] = value

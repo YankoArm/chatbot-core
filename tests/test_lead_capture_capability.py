@@ -125,3 +125,28 @@ def test_lead_capture_rejects_invalid_phone_number():
         "step": "phone",
         "name": "Yanko",
     }
+
+
+def test_lead_capture_can_be_cancelled_without_pending_actions():
+    orchestrator, context = (
+        build_lead_capture_conversation()
+    )
+
+    orchestrator.process(
+        context=context,
+        message="Quiero hablar con una persona",
+    )
+
+    response = orchestrator.process(
+        context=context,
+        message="cancelar",
+    )
+
+    assert response.text == (
+        "De acuerdo. He cancelado la solicitud de atención."
+    )
+    assert response.metadata["capability"] == "lead_capture"
+    assert response.metadata["lead_capture_cancelled"] is True
+    assert context.active_capability is None
+    assert context.get_variable("lead_capture") is None
+    assert context.pending_actions == []
