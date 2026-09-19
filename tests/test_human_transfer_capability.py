@@ -1,8 +1,9 @@
-from types import SimpleNamespace
+﻿from types import SimpleNamespace
 
 from chatbot.capabilities.human_transfer import (
     HumanTransferCapability,
 )
+from chatbot.conversation import ConversationContext
 from chatbot.language import Language
 
 
@@ -10,15 +11,16 @@ def build_context(
     *,
     language: Language = Language.ES,
     pending_actions: list | None = None,
-) -> SimpleNamespace:
-    return SimpleNamespace(
-        language=language,
-        pending_actions=(
-            pending_actions
-            if pending_actions is not None
-            else []
-        ),
+) -> ConversationContext:
+    context = ConversationContext(
+        session_id="human-transfer-test",
     )
+    context.set_language(language)
+
+    if pending_actions is not None:
+        context.pending_actions = pending_actions
+
+    return context
 
 
 def test_human_transfer_capability_has_expected_name():
@@ -59,7 +61,7 @@ def test_human_transfer_does_not_handle_unrelated_message():
     )
 
 
-def test_human_transfer_returns_spanish_response():
+def test_human_transfer_requests_reason_before_registering_action():
     capability = HumanTransferCapability()
     context = build_context()
 
@@ -68,39 +70,23 @@ def test_human_transfer_returns_spanish_response():
         "Necesito hablar con alguien",
     )
 
+    assert response.text == (
+        "Claro. Cuéntame brevemente qué necesitas y se lo "
+        "trasladaré al equipo."
+    )
     assert response.metadata["capability"] == (
         "human_transfer"
     )
-    assert response.metadata["handled"] is True
-    assert response.metadata["language"] == "es"
-    assert (
-        response.metadata["human_transfer_requested"]
-        is True
+    assert response.metadata["human_transfer_step"] == (
+        "reason"
     )
-    assert response.metadata["transfer_registered"] is True
-    assert "persona" in response.text.lower()
+    assert context.pending_actions == []
+    assert capability.has_active_flow(context) is True
 
 
-def test_human_transfer_returns_english_response():
-    capability = HumanTransferCapability()
-    context = build_context(
-        language=Language.EN,
-    )
-
-    response = capability.handle(
-        context,
-        "I need human support",
-    )
-
-    assert response.metadata["language"] == "en"
-    assert response.metadata["transfer_registered"] is True
-    assert "person" in response.text.lower()
-
-
-def test_human_transfer_registers_pending_action():
+def test_human_transfer_registers_reason_as_pending_action():
     capability = HumanTransferCapability()
     pending_actions = []
-
     context = build_context(
         pending_actions=pending_actions,
     )
@@ -109,14 +95,41 @@ def test_human_transfer_registers_pending_action():
         context,
         "Quiero hablar con una persona",
     )
+    response = capability.handle(
+        context,
+        "Quiero asesoramiento para mi cabello.",
+    )
 
+    assert response.metadata["human_transfer_requested"] is True
+    assert response.metadata["transfer_registered"] is True
     assert pending_actions == [
         {
             "type": "human_transfer",
             "status": "pending",
-            "message": "Quiero hablar con una persona",
+            "message": (
+                "Quiero asesoramiento para mi cabello."
+            ),
         }
     ]
+    assert capability.has_active_flow(context) is False
+
+
+def test_human_transfer_can_be_cancelled_before_registering_action():
+    capability = HumanTransferCapability()
+    context = build_context()
+
+    capability.handle(
+        context,
+        "Quiero hablar con una persona",
+    )
+    response = capability.handle(
+        context,
+        "cancelar",
+    )
+
+    assert response.metadata["human_transfer_cancelled"] is True
+    assert context.pending_actions == []
+    assert capability.has_active_flow(context) is False
 
 
 def test_human_transfer_handles_missing_pending_actions():
@@ -131,14 +144,12 @@ def test_human_transfer_handles_missing_pending_actions():
         "Quiero hablar con alguien",
     )
 
-    assert (
-        response.metadata["human_transfer_requested"]
-        is True
+    assert response.metadata["human_transfer_step"] == (
+        "reason"
     )
-    assert response.metadata["transfer_registered"] is False
 
-def test_human_transfer_uses_custom_knowledge_response(
-) -> None:
+
+def test_human_transfer_uses_custom_knowledge_response():
     class CustomKnowledgeService:
         def get_section(
             self,
@@ -172,14 +183,16 @@ def test_human_transfer_uses_custom_knowledge_response(
 
     capability = HumanTransferCapability()
 
-    response = capability.handle(
+    capability.handle(
         context,
         "I need human support",
+    )
+    response = capability.handle(
+        context,
+        "I need help choosing a service.",
     )
 
     assert response.text == (
         "We will notify the team to assist you."
     )
-    assert response.metadata[
-        "transfer_registered"
-    ] is True
+    assert response.metadata["transfer_registered"] is True

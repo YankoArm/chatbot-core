@@ -353,20 +353,45 @@ def test_hairdressing_demo_allows_human_transfer_during_booking():
     )
 
     assert transfer_response.text == (
-        "De acuerdo. Voy a solicitar que una persona "
-        "continúe la conversación contigo."
+        "Claro. Cuéntame brevemente qué necesitas y se lo "
+        "trasladaré al equipo."
     )
     assert transfer_response.metadata["capability"] == (
         "human_transfer"
     )
-    assert (
-        transfer_response.metadata["human_transfer_requested"]
-        is True
+    assert transfer_response.metadata[
+        "human_transfer_step"
+    ] == "reason"
+
+    final_response = app.chat(
+        session_id=session_id,
+        message=(
+            "Tengo dudas sobre mi cabello y quiero que un "
+            "especialista me asesore."
+        ),
     )
-    assert (
-        transfer_response.metadata["transfer_registered"]
-        is True
+
+    assert final_response.text == (
+        "Gracias. He enviado tu solicitud al equipo para que "
+        "una persona continúe la conversación contigo."
     )
+    assert final_response.metadata[
+        "human_transfer_requested"
+    ] is True
+
+    context = app.conversation_store.get(session_id)
+
+    assert context.active_capability is None
+    assert context.pending_actions == [
+        {
+            "type": "human_transfer",
+            "status": "pending",
+            "message": (
+                "Tengo dudas sobre mi cabello y quiero que un "
+                "especialista me asesore."
+            ),
+        }
+    ]
 
 def test_hairdressing_demo_preserves_booking_after_help():
     app = build_hairdressing_demo_application()
