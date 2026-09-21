@@ -12,6 +12,7 @@ from chatbot.responses import Response
 _GREETINGS = {
     Language.ES: {
         "hola",
+        "holis",
         "buenas",
         "buenos dias",
         "buenas tardes",

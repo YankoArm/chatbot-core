@@ -44,3 +44,13 @@ def test_price_request_with_greeting_uses_faq():
     assert response.metadata["capability"] == "faq"
     assert response.metadata["answer_found"] is True
     assert "Corte de mujer — 25 €" in response.text
+def test_holis_is_handled_as_spanish_greeting():
+    capability = GreetingCapability()
+    context = ConversationContext(
+        session_id="informal-greeting-session",
+    )
+
+    assert capability.can_handle(
+        context,
+        "Holis",
+    ) is True

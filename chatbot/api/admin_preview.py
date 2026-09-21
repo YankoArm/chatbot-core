@@ -368,6 +368,7 @@ def _render_preview_page(
         {_render_preview_suggestions(definition)}
         <form
             class="admin-form"
+            id="preview-form"
             method="post"
             action="/admin/clients/{escape(definition.id)}/preview"
         >
@@ -422,8 +423,10 @@ def _render_preview_suggestions(
         (
             '<button '
             'class="tag preview-suggestion" '
-            'type="button" '
-            'data-preview-message="'
+            'type="submit" '
+            'form="preview-form" '
+            'name="message" '
+            'value="'
             f'{escape(message, quote=True)}">'
             f"{escape(message)}"
             "</button>"
@@ -450,19 +453,6 @@ def _render_preview_suggestions(
                 }});
             }}
 
-            const input = document.querySelector(
-                "#preview-message"
-            );
-            const form = input?.form;
-
-            document.querySelectorAll(
-                ".preview-suggestion"
-            ).forEach((button) => {{
-                button.addEventListener("click", () => {{
-                    input.value = button.dataset.previewMessage;
-                    form.requestSubmit();
-                }});
-            }});
         }})();
     </script>
     """

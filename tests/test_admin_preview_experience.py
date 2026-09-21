@@ -24,14 +24,20 @@ def test_preview_offers_suggestions_and_scrolls_to_latest_turn() -> None:
     )
 
     assert response.status_code == 200
-    assert 'data-preview-message="Hola"' in response.text
+    assert 'id="preview-form"' in response.text
+    assert response.text.count(
+        'form="preview-form"'
+    ) == 3
+    assert 'name="message"' in response.text
+    assert 'value="Hola"' in response.text
     assert (
-        'data-preview-message="¿Qué servicios ofrecéis?"'
+        'value="¿Qué servicios ofrecéis?"'
         in response.text
     )
     assert (
-        'data-preview-message="Quiero hablar con una persona"'
+        'value="Quiero hablar con una persona"'
         in response.text
     )
+    assert 'data-preview-message' not in response.text
     assert "scrollIntoView" in response.text
     assert "preview-conversation" in response.text
