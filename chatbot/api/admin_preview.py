@@ -425,6 +425,7 @@ def _render_preview_suggestions(
             'class="tag preview-suggestion" '
             'type="submit" '
             'form="preview-form" '
+            'formnovalidate '
             'name="message" '
             'value="'
             f'{escape(message, quote=True)}">'

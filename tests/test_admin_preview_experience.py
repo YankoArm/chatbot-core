@@ -28,6 +28,7 @@ def test_preview_offers_suggestions_and_scrolls_to_latest_turn() -> None:
     assert response.text.count(
         'form="preview-form"'
     ) == 3
+    assert response.text.count('formnovalidate') == 3
     assert 'name="message"' in response.text
     assert 'value="Hola"' in response.text
     assert (
