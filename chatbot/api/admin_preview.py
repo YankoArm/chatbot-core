@@ -210,6 +210,11 @@ def build_admin_preview_router(
             )[0].strip()
 
             if not message:
+                message = form_data.get(
+                    "suggestion",
+                    [""],
+                )[0].strip()
+            if not message:
                 raise ValueError(
                     "Escribe un mensaje para probar el asistente."
                 )
@@ -426,7 +431,7 @@ def _render_preview_suggestions(
             'type="submit" '
             'form="preview-form" '
             'formnovalidate '
-            'name="message" '
+            'name="suggestion" '
             'value="'
             f'{escape(message, quote=True)}">'
             f"{escape(message)}"

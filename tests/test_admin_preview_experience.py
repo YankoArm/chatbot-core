@@ -29,7 +29,7 @@ def test_preview_offers_suggestions_and_scrolls_to_latest_turn() -> None:
         'form="preview-form"'
     ) == 3
     assert response.text.count('formnovalidate') == 3
-    assert 'name="message"' in response.text
+    assert 'name="suggestion"' in response.text
     assert 'value="Hola"' in response.text
     assert (
         'value="¿Qué servicios ofrecéis?"'
@@ -42,3 +42,20 @@ def test_preview_offers_suggestions_and_scrolls_to_latest_turn() -> None:
     assert 'data-preview-message' not in response.text
     assert "scrollIntoView" in response.text
     assert "preview-conversation" in response.text
+
+def test_preview_processes_suggestion_without_manual_message() -> None:
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/admin/clients/professional_services_demo/preview",
+        data={
+            "history": "[]",
+            "suggestion": "Hola",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "¡Hola!" in response.text
