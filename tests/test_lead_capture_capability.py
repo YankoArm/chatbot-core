@@ -150,3 +150,39 @@ def test_lead_capture_can_be_cancelled_without_pending_actions():
     assert context.active_capability is None
     assert context.get_variable("lead_capture") is None
     assert context.pending_actions == []
+
+
+def test_lead_capture_acknowledges_positive_reply_after_completion():
+    orchestrator, context = (
+        build_lead_capture_conversation()
+    )
+
+    orchestrator.process(
+        context=context,
+        message="Quiero hablar con una persona",
+    )
+    orchestrator.process(
+        context=context,
+        message="Yanko",
+    )
+    orchestrator.process(
+        context=context,
+        message="600123123",
+    )
+    orchestrator.process(
+        context=context,
+        message="Necesito información sobre automatización.",
+    )
+
+    response = orchestrator.process(
+        context=context,
+        message="Genial",
+    )
+
+    assert response.text == (
+        "Me alegra que todo haya sido de tu agrado. "
+        "El equipo revisará tu solicitud y se pondrá en "
+        "contacto contigo lo antes posible."
+    )
+    assert response.metadata["capability"] == "lead_capture"
+    assert response.metadata["lead_capture_follow_up"] is True

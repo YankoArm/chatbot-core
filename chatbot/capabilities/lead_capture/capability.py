@@ -33,6 +33,23 @@ _TRANSFER_KEYWORDS = {
 
 _STATE_KEY = "lead_capture"
 
+_FOLLOW_UP_KEY = "lead_capture_follow_up"
+
+_FOLLOW_UP_KEYWORDS = {
+    "genial",
+    "perfecto",
+    "perfecta",
+    "estupendo",
+    "estupenda",
+    "gracias",
+    "muchas gracias",
+    "de acuerdo",
+    "vale",
+    "ok",
+    "okay",
+}
+
+
 
 class LeadCaptureCapability(BaseCapability):
     """
@@ -61,11 +78,20 @@ class LeadCaptureCapability(BaseCapability):
         context: Any,
         message: str,
     ) -> bool:
-        return (
-            self._normalize_text(message)
-            in _TRANSFER_KEYWORDS
+        normalized_message = self._normalize_text(
+            message
         )
 
+        if (
+            context.get_variable(_FOLLOW_UP_KEY) is True
+            and normalized_message in _FOLLOW_UP_KEYWORDS
+        ):
+            return True
+
+        return (
+            normalized_message
+            in _TRANSFER_KEYWORDS
+        )
     def has_active_flow(
         self,
         context: Any,
@@ -83,6 +109,21 @@ class LeadCaptureCapability(BaseCapability):
         state = context.get_variable(_STATE_KEY)
 
         if not isinstance(state, dict):
+            if context.get_variable(_FOLLOW_UP_KEY) is True:
+                context.remove_variable(_FOLLOW_UP_KEY)
+
+                return Response(
+                    text=(
+                        "Me alegra que todo haya sido de tu agrado. "
+                        "El equipo revisará tu solicitud y se pondrá en "
+                        "contacto contigo lo antes posible."
+                    ),
+                    metadata={
+                        "capability": self.name,
+                        "handled": True,
+                        "lead_capture_follow_up": True,
+                    },
+                )
             context.set_variable(
                 _STATE_KEY,
                 {"step": "name"},
@@ -184,6 +225,10 @@ class LeadCaptureCapability(BaseCapability):
             }
         )
         context.remove_variable(_STATE_KEY)
+        context.set_variable(
+            _FOLLOW_UP_KEY,
+            True,
+        )
         context.clear_active_capability()
 
         return Response(
