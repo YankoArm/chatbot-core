@@ -30,6 +30,10 @@ _GREETINGS = {
     },
 }
 
+_STRETCHED_HOLA_PATTERN = re.compile(
+    r"^hol(?:a+|i+s+)$"
+)
+
 _RESPONSES = {
     Language.ES: "¡Hola! 👋 ¿En qué puedo ayudarte?",
     Language.EN: "Hello! 👋 How can I help you?",
@@ -59,6 +63,11 @@ class GreetingCapability(BaseCapability):
 
         if not normalized_message:
             return False
+
+        if _STRETCHED_HOLA_PATTERN.fullmatch(
+            normalized_message
+        ):
+            return True
 
         greetings = {
             greeting

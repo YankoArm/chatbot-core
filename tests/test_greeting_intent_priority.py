@@ -54,3 +54,20 @@ def test_holis_is_handled_as_spanish_greeting():
         context,
         "Holis",
     ) is True
+
+
+def test_stretched_hola_variants_are_handled_as_greetings():
+    capability = GreetingCapability()
+    context = ConversationContext(
+        session_id="stretched-greeting-session",
+    )
+
+    for message in (
+        "Holaa",
+        "holiis",
+        "holiiiis",
+    ):
+        assert capability.can_handle(
+            context,
+            message,
+        ) is True
