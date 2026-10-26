@@ -18,7 +18,7 @@ class WhatsAppParserProtocol(Protocol):
     def parse(
         self,
         payload: dict[str, object],
-    ) -> IncomingWhatsAppMessage:
+    ) -> IncomingWhatsAppMessage | None:
         ...
 
 
@@ -73,6 +73,9 @@ class WhatsAppMessageHandler:
         parsed_message = self._parser.parse(
             payload
         )
+
+        if parsed_message is None:
+            return None
 
         if self._orchestrator is None:
             return parsed_message

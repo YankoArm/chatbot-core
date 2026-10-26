@@ -13,13 +13,17 @@ class WhatsAppPayloadParser:
     def parse(
         self,
         payload: dict[str, object],
-    ) -> IncomingWhatsAppMessage:
+    ) -> IncomingWhatsAppMessage | None:
         value = self._extract_value(
             payload
         )
         message = self._extract_message(
             value
         )
+
+        if message is None:
+            return None
+
         phone_number_id = (
             self._extract_phone_number_id(
                 value
@@ -59,22 +63,32 @@ class WhatsAppPayloadParser:
     def _extract_message(
         self,
         value: dict[str, object],
-    ) -> dict[str, object]:
-        try:
-            message = value["messages"][0]
+    ) -> dict[str, object] | None:
+        messages = value.get(
+            "messages"
+        )
 
-        except (
-            KeyError,
-            IndexError,
-            TypeError,
-        ) as exc:
+        if messages is None:
+            if "statuses" in value:
+                return None
+
             raise WhatsAppPayloadError(
                 "WhatsApp payload does not contain a message"
-            ) from exc
+            )
+
+        if not isinstance(messages, list):
+            raise WhatsAppPayloadError(
+                "WhatsApp messages payload is invalid"
+            )
+
+        if not messages:
+            return None
+
+        message = messages[0]
 
         if not isinstance(message, dict):
             raise WhatsAppPayloadError(
-                "WhatsApp payload does not contain a message"
+                "WhatsApp payload contains an invalid message"
             )
 
         return message
