@@ -765,7 +765,7 @@ def _render_checkbox(
     )
 
     return f"""
-    <label>
+    <label class="checkbox-row">
         <input
             type="checkbox"
             name="{escape(name)}"
