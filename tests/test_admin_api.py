@@ -556,7 +556,7 @@ def test_admin_adds_service_to_client_definition(
 
     assert form_response.status_code == 200
     assert "Añadir servicio" in form_response.text
-    assert 'name="service_id"' in form_response.text
+    assert 'name="service_id"' not in form_response.text
     assert 'name="name_es"' in form_response.text
     assert 'name="duration_minutes"' in form_response.text
     assert 'name="price_type"' in form_response.text
@@ -565,7 +565,6 @@ def test_admin_adds_service_to_client_definition(
     create_response = client.post(
         "/admin/clients/salon_centro/services",
         data={
-            "service_id": "highlights",
             "name_es": "Mechas",
             "name_en": "Highlights",
             "duration_minutes": "120",
@@ -592,7 +591,7 @@ def test_admin_adds_service_to_client_definition(
         "services"
     ] == [
         {
-            "id": "highlights",
+            "id": "mechas",
             "name": {
                 "es": "Mechas",
                 "en": "Highlights",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 
 from collections.abc import Callable
 from copy import deepcopy
@@ -40,6 +41,71 @@ DefinitionLoader = Callable[
     InstanceDefinition | None,
 ]
 PageRenderer = Callable[..., str]
+
+
+_SERVICE_ID_STOPWORDS = {
+    "de",
+    "del",
+    "el",
+    "la",
+    "los",
+    "las",
+}
+
+
+def _build_unique_service_id(
+    name: str,
+    services: list[dict],
+) -> str:
+    normalized = unicodedata.normalize(
+        "NFKD",
+        name,
+    )
+
+    normalized = "".join(
+        character
+        for character in normalized
+        if not unicodedata.combining(character)
+    )
+
+    tokens = re.findall(
+        r"[a-z0-9]+",
+        normalized.casefold(),
+    )
+
+    tokens = [
+        token
+        for token in tokens
+        if token not in _SERVICE_ID_STOPWORDS
+    ]
+
+    base = "_".join(tokens)
+
+    if not base:
+        base = "service"
+
+    if not base[0].isalpha():
+        base = f"service_{base}"
+
+    base = base[:64].rstrip("_")
+
+    existing_ids = {
+        str(service.get("id", ""))
+        for service in services
+    }
+
+    candidate = base
+    number = 2
+
+    while candidate in existing_ids:
+        suffix = f"_{number}"
+        candidate = (
+            base[:64 - len(suffix)].rstrip("_")
+            + suffix
+        )
+        number += 1
+
+    return candidate
 
 
 def build_admin_services_router(
@@ -155,16 +221,7 @@ def build_admin_services_router(
                 method="post"
                 action="/admin/clients/{escape(definition.id)}/services"
             >
-                <label>
-                    <span>Identificador</span>
-                    <input
-                        name="service_id"
-                        value="{escape(form_values.get("service_id", ""))}"
-                        placeholder="haircut"
-                        required
-                        pattern="[a-z][a-z0-9_]*"
-                    >
-                </label>
+
 
                 <label>
                     <span>Nombre en español</span>
@@ -366,6 +423,13 @@ def build_admin_services_router(
             )
         }
 
+        values["service_id"] = (
+            _build_unique_service_id(
+                values["name_es"],
+                [],
+            )
+        )
+
         error: str | None = None
         duration_minutes = 0
         amount_cents = 0
@@ -442,6 +506,13 @@ def build_admin_services_router(
             definition.settings.get(
                 "services",
                 [],
+            )
+        )
+
+        values["service_id"] = (
+            _build_unique_service_id(
+                values["name_es"],
+                services,
             )
         )
 
