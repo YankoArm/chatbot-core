@@ -2546,3 +2546,115 @@ def test_admin_suggests_faq_payment_keywords(
     assert "bizum" in keywords
 
     repository.close()
+
+
+
+def test_admin_business_form_shows_guided_menu_controls(
+) -> None:
+    repository = SQLiteInstanceDefinitionRepository(
+        database_path=":memory:",
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salon Centro",
+            template_id="hairdressing",
+            settings={
+                "knowledge": {},
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(app)
+
+    response = client.get(
+        "/admin/clients/salon_centro/business"
+    )
+
+    assert response.status_code == 200
+    assert "Men\u00fa inicial guiado" in response.text
+    assert 'name="menu_enabled"' in response.text
+    assert 'name="menu_services"' in response.text
+    assert 'name="menu_booking"' in response.text
+    assert 'name="menu_faq"' in response.text
+    assert (
+        'name="menu_human_transfer"'
+        in response.text
+    )
+
+    repository.close()
+
+
+def test_admin_business_saves_guided_menu(
+) -> None:
+    repository = SQLiteInstanceDefinitionRepository(
+        database_path=":memory:",
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salon Centro",
+            template_id="hairdressing",
+            settings={
+                "knowledge": {},
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/admin/clients/salon_centro/business",
+        data={
+            "company_name": "Salon Centro",
+            "description": "",
+            "phone": "",
+            "email": "",
+            "address": "",
+            "website": "",
+            "greeting_es": (
+                "?Hola! Bienvenido a Salon Centro."
+            ),
+            "greeting_en": "",
+            "menu_enabled": "on",
+            "menu_services": "on",
+            "menu_booking": "on",
+            "menu_faq": "on",
+            "human_transfer_es": (
+                "El equipo revisar? tu solicitud."
+            ),
+            "human_transfer_en": "",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+
+    stored_definition = repository.get(
+        "salon_centro"
+    )
+    assert stored_definition is not None
+
+    menu = stored_definition.settings[
+        "knowledge"
+    ]["greetings"]["menu"]
+
+    assert menu == {
+        "enabled": True,
+        "items": {
+            "services": True,
+            "booking": True,
+            "faq": True,
+            "human_transfer": False,
+        },
+    }
+
+    repository.close()

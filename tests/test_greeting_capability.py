@@ -162,3 +162,99 @@ def test_handle_uses_custom_knowledge_greeting(
     assert response.text == (
         "¡Hola! Bienvenido a Salón Centro."
     )
+
+
+def test_handle_appends_configured_guided_menu(
+    capability: GreetingCapability,
+    context: ConversationContext,
+) -> None:
+    class CustomKnowledgeService:
+        def get_section(
+            self,
+            section: str,
+            default=None,
+        ):
+            knowledge = {
+                "greetings": {
+                    "welcome": {
+                        "es": (
+                            "\u00a1Hola! Bienvenido a Sal\u00f3n Centro."
+                        ),
+                    },
+                    "menu": {
+                        "enabled": True,
+                        "items": {
+                            "services": True,
+                            "booking": True,
+                            "faq": False,
+                            "human_transfer": True,
+                        },
+                    },
+                },
+            }
+
+            return knowledge.get(
+                section,
+                default,
+            )
+
+    context.knowledge_service = (
+        CustomKnowledgeService()
+    )
+
+    response = capability.handle(
+        context,
+        "hola",
+    )
+
+    assert response.text == (
+        "\u00a1Hola! Bienvenido a Sal\u00f3n Centro."
+        "\n\nOpciones r\u00e1pidas:"
+        "\n\u2022 Servicios y precios: "
+        "escribe \u00abprecios\u00bb."
+        "\n\u2022 Reservar una cita: "
+        "escribe \u00abreservar\u00bb."
+        "\n\u2022 Hablar con una persona: "
+        "escribe \u00abhablar con una persona\u00bb."
+    )
+
+
+def test_handle_does_not_append_disabled_guided_menu(
+    capability: GreetingCapability,
+    context: ConversationContext,
+) -> None:
+    class CustomKnowledgeService:
+        def get_section(
+            self,
+            section: str,
+            default=None,
+        ):
+            knowledge = {
+                "greetings": {
+                    "welcome": {
+                        "es": "Bienvenido.",
+                    },
+                    "menu": {
+                        "enabled": False,
+                        "items": {
+                            "services": True,
+                        },
+                    },
+                },
+            }
+
+            return knowledge.get(
+                section,
+                default,
+            )
+
+    context.knowledge_service = (
+        CustomKnowledgeService()
+    )
+
+    response = capability.handle(
+        context,
+        "hola",
+    )
+
+    assert response.text == "Bienvenido."

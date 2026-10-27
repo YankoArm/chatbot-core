@@ -114,6 +114,10 @@ class GreetingCapability(BaseCapability):
         context: Any,
         language: Language,
     ) -> str:
+        default_response = _RESPONSES[
+            language
+        ]
+
         knowledge_service = getattr(
             context,
             "knowledge_service",
@@ -121,9 +125,7 @@ class GreetingCapability(BaseCapability):
         )
 
         if knowledge_service is None:
-            return _RESPONSES[
-                language
-            ]
+            return default_response
 
         get_section = getattr(
             knowledge_service,
@@ -134,9 +136,7 @@ class GreetingCapability(BaseCapability):
         if not callable(
             get_section
         ):
-            return _RESPONSES[
-                language
-            ]
+            return default_response
 
         try:
             greetings = get_section(
@@ -144,47 +144,151 @@ class GreetingCapability(BaseCapability):
                 {},
             )
         except FileNotFoundError:
-            return _RESPONSES[
-                language
-            ]
+            return default_response
 
         if not isinstance(
             greetings,
             dict,
         ):
-            return _RESPONSES[
-                language
-            ]
+            return default_response
+
+        response_text = default_response
 
         welcome = greetings.get(
             "welcome",
             {},
         )
 
-        if not isinstance(
+        if isinstance(
             welcome,
             dict,
         ):
-            return _RESPONSES[
-                language
-            ]
+            configured_response = welcome.get(
+                language.value
+            )
 
-        configured_response = welcome.get(
-            language.value
+            if (
+                isinstance(
+                    configured_response,
+                    str,
+                )
+                and configured_response.strip()
+            ):
+                response_text = (
+                    configured_response.strip()
+                )
+
+        return (
+            GreetingCapability
+            ._append_guided_menu(
+                response_text=response_text,
+                greetings=greetings,
+                language=language,
+            )
+        )
+
+    @staticmethod
+    def _append_guided_menu(
+        *,
+        response_text: str,
+        greetings: dict[str, Any],
+        language: Language,
+    ) -> str:
+        menu = greetings.get(
+            "menu",
+            {},
         )
 
         if (
-            isinstance(
-                configured_response,
-                str,
+            not isinstance(
+                menu,
+                dict,
             )
-            and configured_response.strip()
+            or menu.get("enabled") is not True
         ):
-            return configured_response.strip()
+            return response_text
 
-        return _RESPONSES[
-            language
+        items = menu.get(
+            "items",
+            {},
+        )
+
+        if not isinstance(
+            items,
+            dict,
+        ):
+            return response_text
+
+        labels = {
+            Language.ES: {
+                "services": (
+                    "\u2022 Servicios y precios: "
+                    "escribe \u00abprecios\u00bb."
+                ),
+                "booking": (
+                    "\u2022 Reservar una cita: "
+                    "escribe \u00abreservar\u00bb."
+                ),
+                "faq": (
+                    "\u2022 Preguntas frecuentes: "
+                    "escribe tu pregunta directamente."
+                ),
+                "human_transfer": (
+                    "\u2022 Hablar con una persona: "
+                    "escribe \u00abhablar con una persona\u00bb."
+                ),
+            },
+            Language.EN: {
+                "services": (
+                    "\u2022 Services and prices: "
+                    "write \u201cprices\u201d."
+                ),
+                "booking": (
+                    "\u2022 Book an appointment: "
+                    "write \u201cbook\u201d."
+                ),
+                "faq": (
+                    "\u2022 Frequently asked questions: "
+                    "write your question directly."
+                ),
+                "human_transfer": (
+                    "\u2022 Speak to a person: "
+                    "write \u201cspeak to a person\u201d."
+                ),
+            },
+        }
+
+        introductions = {
+            Language.ES: "Opciones r\u00e1pidas:",
+            Language.EN: "Quick options:",
+        }
+
+        selected_items = [
+            labels[language][item_name]
+            for item_name in (
+                "services",
+                "booking",
+                "faq",
+                "human_transfer",
+            )
+            if items.get(
+                item_name
+            ) is True
         ]
+
+        if not selected_items:
+            return response_text
+
+        return (
+            response_text
+            + "\n\n"
+            + introductions[language]
+            + "\n"
+            + "\n".join(
+                selected_items
+            )
+        )
+
     @staticmethod
     def _get_language(
         context: Any,

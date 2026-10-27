@@ -154,6 +154,45 @@ def build_admin_business_router(
             </section>
 
             <section class="form-section">
+                <h2>Menú inicial guiado</h2>
+                <p class="form-help">
+                    Añade accesos rápidos debajo del saludo.
+                    El cliente siempre podrá escribir
+                    normalmente lo que necesite.
+                </p>
+
+                {_render_checkbox(
+                    name="menu_enabled",
+                    label="Mostrar menú inicial guiado",
+                    value=values["menu_enabled"],
+                )}
+
+                {_render_checkbox(
+                    name="menu_services",
+                    label="Mostrar servicios y precios",
+                    value=values["menu_services"],
+                )}
+
+                {_render_checkbox(
+                    name="menu_booking",
+                    label="Mostrar reserva de cita",
+                    value=values["menu_booking"],
+                )}
+
+                {_render_checkbox(
+                    name="menu_faq",
+                    label="Mostrar preguntas frecuentes",
+                    value=values["menu_faq"],
+                )}
+
+                {_render_checkbox(
+                    name="menu_human_transfer",
+                    label="Mostrar atención humana",
+                    value=values["menu_human_transfer"],
+                )}
+            </section>
+
+            <section class="form-section">
                 <h2>Transferencia a una persona</h2>
                 <p class="form-help">
                     El bot mostrará este mensaje después
@@ -374,6 +413,35 @@ def _definition_form_values(
     ):
         transfer_response = {}
 
+    menu = (
+        greetings.get(
+            "menu",
+            {},
+        )
+        if isinstance(
+            greetings,
+            dict,
+        )
+        else {}
+    )
+
+    if not isinstance(
+        menu,
+        dict,
+    ):
+        menu = {}
+
+    menu_items = menu.get(
+        "items",
+        {},
+    )
+
+    if not isinstance(
+        menu_items,
+        dict,
+    ):
+        menu_items = {}
+
     return _complete_form_values({
         "company_name": str(
             company.get(
@@ -423,6 +491,41 @@ def _definition_form_values(
                 "Hello! 👋 How can I help you?",
             )
         ),
+        "menu_enabled": (
+            "on"
+            if menu.get(
+                "enabled"
+            ) is True
+            else ""
+        ),
+        "menu_services": (
+            "on"
+            if menu_items.get(
+                "services"
+            ) is True
+            else ""
+        ),
+        "menu_booking": (
+            "on"
+            if menu_items.get(
+                "booking"
+            ) is True
+            else ""
+        ),
+        "menu_faq": (
+            "on"
+            if menu_items.get(
+                "faq"
+            ) is True
+            else ""
+        ),
+        "menu_human_transfer": (
+            "on"
+            if menu_items.get(
+                "human_transfer"
+            ) is True
+            else ""
+        ),
         "human_transfer_es": str(
             transfer_response.get(
                 "es",
@@ -448,7 +551,7 @@ def _build_business_knowledge(
     values: dict[str, str],
 ) -> tuple[
     dict[str, str],
-    dict[str, dict[str, str]],
+    dict[str, Any],
     dict[str, dict[str, str]],
 ]:
     company_name = values[
@@ -552,6 +655,45 @@ def _build_business_knowledge(
         company,
         {
             "welcome": welcome,
+            "menu": {
+                "enabled": (
+                    values.get(
+                        "menu_enabled",
+                        "",
+                    )
+                    == "on"
+                ),
+                "items": {
+                    "services": (
+                        values.get(
+                            "menu_services",
+                            "",
+                        )
+                        == "on"
+                    ),
+                    "booking": (
+                        values.get(
+                            "menu_booking",
+                            "",
+                        )
+                        == "on"
+                    ),
+                    "faq": (
+                        values.get(
+                            "menu_faq",
+                            "",
+                        )
+                        == "on"
+                    ),
+                    "human_transfer": (
+                        values.get(
+                            "menu_human_transfer",
+                            "",
+                        )
+                        == "on"
+                    ),
+                },
+            },
         },
         {
             "response": transfer_response,
@@ -575,6 +717,11 @@ def _complete_form_values(
         "website",
         "greeting_es",
         "greeting_en",
+        "menu_enabled",
+        "menu_services",
+        "menu_booking",
+        "menu_faq",
+        "menu_human_transfer",
         "human_transfer_es",
         "human_transfer_en",
     ):
@@ -603,6 +750,31 @@ async def _parse_form(
         key: values[0]
         for key, values in parsed_form.items()
     }
+
+
+def _render_checkbox(
+    *,
+    name: str,
+    label: str,
+    value: str,
+) -> str:
+    checked_attribute = (
+        " checked"
+        if value == "on"
+        else ""
+    )
+
+    return f"""
+    <label>
+        <input
+            type="checkbox"
+            name="{escape(name)}"
+            value="on"
+            {checked_attribute}
+        >
+        {escape(label)}
+    </label>
+    """
 
 
 def _render_input(
