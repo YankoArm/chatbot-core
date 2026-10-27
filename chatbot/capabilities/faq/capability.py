@@ -5,6 +5,9 @@ import unicodedata
 from typing import Any
 
 from chatbot.capabilities.base_capability import BaseCapability
+from chatbot.capabilities.faq.catalog import (
+    build_service_catalog_answer,
+)
 from chatbot.language import Language
 from chatbot.responses import Response
 
@@ -121,10 +124,31 @@ class FAQCapability(BaseCapability):
     ) -> Response:
         language = self._get_language(context)
 
-        answer = self._find_answer(
-            context=context,
+        variables = getattr(
+            context,
+            "variables",
+            {},
+        )
+
+        services = (
+            variables.get("services")
+            if isinstance(variables, dict)
+            else None
+        )
+
+        catalog_answer = build_service_catalog_answer(
+            services=services,
             message=message,
             language=language,
+        )
+
+        answer = (
+            catalog_answer
+            or self._find_answer(
+                context=context,
+                message=message,
+                language=language,
+            )
         )
 
         return Response(

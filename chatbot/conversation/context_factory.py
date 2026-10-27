@@ -55,8 +55,17 @@ class ConversationContextFactory:
             )
         )
 
-        return ConversationContext(
+        context = ConversationContext(
             session_id=normalized_session_id,
             user_id=normalized_user_id,
             knowledge_service=knowledge_service,
         )
+
+        services = instance.settings.get(
+            "services"
+        )
+
+        if isinstance(services, list):
+            context.variables["services"] = services
+
+        return context
