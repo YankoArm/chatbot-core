@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from copy import deepcopy
 from threading import RLock
 from typing import Protocol
 
@@ -26,6 +27,10 @@ ApplicationFactory = Callable[
 class TenantApplicationRegistry:
     """
     Build and retain one runtime application per FlowForge client.
+
+    Cached applications are reused while their persisted client definition
+    remains unchanged. When the definition changes, only that tenant runtime
+    is rebuilt on its next access.
     """
 
     def __init__(
@@ -44,6 +49,10 @@ class TenantApplicationRegistry:
             str,
             object,
         ] = {}
+        self._definitions: dict[
+            str,
+            InstanceDefinition,
+        ] = {}
         self._lock = RLock()
 
     def get_application(
@@ -51,13 +60,6 @@ class TenantApplicationRegistry:
         client_id: str,
     ) -> object | None:
         with self._lock:
-            cached_application = self._applications.get(
-                client_id
-            )
-
-            if cached_application is not None:
-                return cached_application
-
             definition = (
                 self._instance_definition_repository.get(
                     client_id
@@ -65,11 +67,39 @@ class TenantApplicationRegistry:
             )
 
             if definition is None:
+                self._applications.pop(
+                    client_id,
+                    None,
+                )
+                self._definitions.pop(
+                    client_id,
+                    None,
+                )
                 return None
+
+            cached_definition = self._definitions.get(
+                client_id
+            )
+
+            if (
+                client_id in self._applications
+                and cached_definition == definition
+            ):
+                return self._applications[
+                    client_id
+                ]
 
             application = self._application_factory(
                 definition
             )
-            self._applications[client_id] = application
+
+            self._applications[
+                client_id
+            ] = application
+            self._definitions[
+                client_id
+            ] = deepcopy(
+                definition
+            )
 
             return application
