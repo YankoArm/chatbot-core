@@ -1,6 +1,7 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
 
@@ -52,9 +53,12 @@ class SQLiteLeadRepository(LeadRepository):
                         session_id,
                         name,
                         phone,
-                        reason
+                        reason,
+                        status,
+                        created_at,
+                        contacted_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         lead.action_id,
@@ -63,6 +67,9 @@ class SQLiteLeadRepository(LeadRepository):
                         lead.name,
                         lead.phone,
                         lead.reason,
+                        lead.status,
+                        lead.created_at,
+                        lead.contacted_at,
                     ),
                 )
 
@@ -82,10 +89,15 @@ class SQLiteLeadRepository(LeadRepository):
                     session_id,
                     name,
                     phone,
-                    reason
+                    reason,
+                    status,
+                    created_at,
+                    contacted_at
                 FROM leads
                 WHERE client_id = ?
-                ORDER BY id ASC
+                ORDER BY
+                    created_at DESC,
+                    id DESC
                 """,
                 (
                     client_id,
@@ -96,6 +108,38 @@ class SQLiteLeadRepository(LeadRepository):
             self._row_to_lead(row)
             for row in rows
         )
+
+    def mark_contacted(
+        self,
+        *,
+        client_id: str,
+        action_id: str,
+    ) -> bool:
+        contacted_at = datetime.now(
+            timezone.utc
+        ).isoformat()
+
+        with self._lock:
+            with self._connection:
+                cursor = self._connection.execute(
+                    """
+                    UPDATE leads
+                    SET
+                        status = 'contacted',
+                        contacted_at = ?
+                    WHERE
+                        client_id = ?
+                        AND action_id = ?
+                        AND status != 'contacted'
+                    """,
+                    (
+                        contacted_at,
+                        client_id,
+                        action_id,
+                    ),
+                )
+
+        return cursor.rowcount == 1
 
     def close(self) -> None:
         with self._lock:
@@ -115,8 +159,51 @@ class SQLiteLeadRepository(LeadRepository):
                         session_id TEXT NOT NULL,
                         name TEXT NOT NULL,
                         phone TEXT NOT NULL,
-                        reason TEXT NOT NULL
+                        reason TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        created_at TEXT NOT NULL DEFAULT '',
+                        contacted_at TEXT
                     )
+                    """
+                )
+
+                self._ensure_column(
+                    name="status",
+                    definition=(
+                        "TEXT NOT NULL DEFAULT 'pending'"
+                    ),
+                )
+                self._ensure_column(
+                    name="created_at",
+                    definition=(
+                        "TEXT NOT NULL DEFAULT ''"
+                    ),
+                )
+                self._ensure_column(
+                    name="contacted_at",
+                    definition="TEXT",
+                )
+
+                self._connection.execute(
+                    """
+                    UPDATE leads
+                    SET status = 'pending'
+                    WHERE
+                        status IS NULL
+                        OR status = ''
+                    """
+                )
+
+                self._connection.execute(
+                    """
+                    UPDATE leads
+                    SET created_at = strftime(
+                        '%Y-%m-%dT%H:%M:%SZ',
+                        'now'
+                    )
+                    WHERE
+                        created_at IS NULL
+                        OR created_at = ''
                     """
                 )
 
@@ -127,6 +214,38 @@ class SQLiteLeadRepository(LeadRepository):
                     ON leads (client_id)
                     """
                 )
+
+                self._connection.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS
+                        idx_leads_client_status
+                    ON leads (
+                        client_id,
+                        status
+                    )
+                    """
+                )
+
+    def _ensure_column(
+        self,
+        *,
+        name: str,
+        definition: str,
+    ) -> None:
+        columns = {
+            row["name"]
+            for row in self._connection.execute(
+                "PRAGMA table_info(leads)"
+            ).fetchall()
+        }
+
+        if name in columns:
+            return
+
+        self._connection.execute(
+            f"ALTER TABLE leads "
+            f"ADD COLUMN {name} {definition}"
+        )
 
     @staticmethod
     def _row_to_lead(
@@ -139,4 +258,7 @@ class SQLiteLeadRepository(LeadRepository):
             name=row["name"],
             phone=row["phone"],
             reason=row["reason"],
+            status=row["status"],
+            created_at=row["created_at"],
+            contacted_at=row["contacted_at"],
         )

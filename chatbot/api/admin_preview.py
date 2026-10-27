@@ -121,13 +121,17 @@ def build_admin_preview_router(
         )
 
         responses: list[str] = []
+        active_preview_flow = False
 
         for message in messages:
-            if _is_booking_preview_request(
-                message
+            if (
+                _is_booking_preview_request(
+                    message
+                )
+                and not active_preview_flow
             ):
                 responses.append(
-                    "Las reservas no se pueden probar aquí "
+                    "Las reservas no se pueden probar aqu\u00ed "
                     "porque esta vista no se conecta a Calendar."
                 )
                 continue
@@ -138,11 +142,56 @@ def build_admin_preview_router(
                 ),
                 message=message,
             )
+
+            metadata = getattr(
+                response,
+                "metadata",
+                {},
+            )
+
+            response_text = response.text
+
+            if (
+                isinstance(
+                    metadata,
+                    dict,
+                )
+                and metadata.get(
+                    "lead_captured"
+                ) is True
+            ):
+                response_text = (
+                    response_text
+                    + "\n\n"
+                    + "\u2705 Solicitud simulada correctamente.\n"
+                    + "En una conversaci\u00f3n real, "
+                    + "esta solicitud aparecer\u00eda en "
+                    + "\u00abSolicitudes recibidas\u00bb."
+                )
+
             responses.append(
-                response.text
+                response_text
+            )
+
+            active_preview_flow = (
+                isinstance(
+                    metadata,
+                    dict,
+                )
+                and (
+                    metadata.get(
+                        "lead_capture_step"
+                    )
+                    is not None
+                    or metadata.get(
+                        "human_transfer_step"
+                    )
+                    is not None
+                )
             )
 
         return responses
+
     @router.get(
         "/admin/clients/{client_id}/preview",
         response_class=HTMLResponse,
@@ -327,6 +376,24 @@ def _parse_history(
     return messages
 
 
+def _render_booking_preview_notice(
+    definition: InstanceDefinition,
+) -> str:
+    instance = build_instance_from_definition(
+        definition
+    )
+
+    if "booking" not in instance.capabilities:
+        return ""
+
+    return """
+    <p class="intro preview-notice">
+        Las reservas est\u00e1n desactivadas en esta vista:
+        no se crea ninguna cita ni se conecta con Calendar.
+    </p>
+    """
+
+
 def _render_preview_page(
     *,
     definition: InstanceDefinition,
@@ -362,15 +429,22 @@ def _render_preview_page(
         con su configuración actual.
     </p>
     <section class="panel">
-        <p class="intro">
-            Las reservas están desactivadas en esta vista:
-            no se crea ninguna cita ni se conecta con Calendar.
-        </p>
+        {_render_booking_preview_notice(definition)}
         {error_html}
         <div class="preview-conversation">
             {_render_turns(messages, responses)}
         </div>
         {_render_preview_suggestions(definition)}
+
+        <div class="preview-toolbar">
+            <a
+                class="secondary-button"
+                href="/admin/clients/{escape(definition.id)}/preview"
+            >
+                Reiniciar conversaci&oacute;n
+            </a>
+        </div>
+
         <form
             class="admin-form"
             id="preview-form"

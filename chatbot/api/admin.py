@@ -228,6 +228,37 @@ h1 {
     color: #a3fff6;
 }
 
+
+.preview-toolbar {
+    display: flex;
+    margin: 12px 0 20px;
+    justify-content: flex-end;
+}
+
+.secondary-button {
+    display: inline-flex;
+    padding: 10px 14px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 10px;
+    color: #c8d6e8;
+    background: rgba(5, 14, 26, 0.46);
+    font-size: 0.86rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition:
+        border-color 160ms ease,
+        color 160ms ease,
+        background 160ms ease;
+}
+
+.secondary-button:hover {
+    border-color: rgba(46, 196, 182, 0.5);
+    color: #a3fff6;
+    background: rgba(46, 196, 182, 0.08);
+}
+
 .status {
     display: inline-flex;
     width: fit-content;
@@ -297,6 +328,24 @@ h1 {
     gap: 8px;
     color: #dce7f5;
     font-weight: 700;
+}
+
+
+.admin-form .checkbox-row {
+    display: flex;
+    width: fit-content;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.admin-form .checkbox-row input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    padding: 0;
+    flex: 0 0 auto;
+    accent-color: #2ec4b6;
 }
 
 .admin-form small {
