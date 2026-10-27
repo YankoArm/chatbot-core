@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 
 from collections.abc import Callable
 from copy import deepcopy
@@ -12,6 +13,7 @@ from urllib.parse import parse_qs
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import (
     HTMLResponse,
+    JSONResponse,
     RedirectResponse,
 )
 
@@ -22,6 +24,317 @@ from chatbot.knowledge import JsonKnowledgeProvider
 _FAQ_ID_PATTERN = re.compile(
     r"^[a-z][a-z0-9_]*$"
 )
+
+
+_FAQ_SUGGESTION_STOPWORDS = {
+    "a",
+    "al",
+    "an",
+    "and",
+    "are",
+    "como",
+    "con",
+    "cual",
+    "cuales",
+    "cuando",
+    "de",
+    "del",
+    "do",
+    "does",
+    "el",
+    "en",
+    "es",
+    "esta",
+    "este",
+    "for",
+    "hay",
+    "how",
+    "is",
+    "la",
+    "las",
+    "lo",
+    "los",
+    "of",
+    "on",
+    "our",
+    "para",
+    "por",
+    "puede",
+    "pueden",
+    "puedo",
+    "que",
+    "sin",
+    "that",
+    "the",
+    "this",
+    "to",
+    "una",
+    "unas",
+    "uno",
+    "unos",
+    "we",
+    "what",
+    "when",
+    "where",
+    "with",
+    "you",
+    "your",
+    "aceptamos",
+    "estamos",
+    "ofrecemos",
+    "realizamos",
+    "tenemos",
+}
+
+
+_FAQ_SUGGESTION_TOPICS = (
+    (
+        {
+            "pago",
+            "pagos",
+            "pagar",
+            "tarjeta",
+            "efectivo",
+            "bizum",
+            "payment",
+            "payments",
+            "pay",
+            "card",
+            "cash",
+        },
+        (
+            "formas de pago",
+            "metodos de pago",
+            "como pagar",
+            "pagar",
+            "tarjeta",
+            "efectivo",
+            "bizum",
+            "payment methods",
+            "how to pay",
+        ),
+    ),
+    (
+        {
+            "direccion",
+            "ubicacion",
+            "llegar",
+            "donde",
+            "address",
+            "location",
+            "located",
+        },
+        (
+            "donde estais",
+            "direccion",
+            "ubicacion",
+            "como llegar",
+            "address",
+            "location",
+            "how to get there",
+        ),
+    ),
+    (
+        {
+            "precio",
+            "precios",
+            "cuesta",
+            "cuestan",
+            "vale",
+            "tarifa",
+            "tarifas",
+            "price",
+            "prices",
+            "cost",
+        },
+        (
+            "precio",
+            "precios",
+            "cuanto cuesta",
+            "cuanto vale",
+            "tarifas",
+            "price",
+            "prices",
+            "how much",
+        ),
+    ),
+    (
+        {
+            "horario",
+            "horarios",
+            "abris",
+            "abrir",
+            "cerrais",
+            "cerrar",
+            "hours",
+            "open",
+            "close",
+        },
+        (
+            "horario",
+            "horarios",
+            "cuando abris",
+            "cuando cerrais",
+            "opening hours",
+            "what time do you open",
+        ),
+    ),
+    (
+        {
+            "servicio",
+            "servicios",
+            "sesion",
+            "sesiones",
+            "ofreceis",
+            "service",
+            "services",
+            "session",
+            "sessions",
+        },
+        (
+            "servicios",
+            "sesiones",
+            "tipos de sesion",
+            "que ofreceis",
+            "services",
+            "sessions",
+            "what do you offer",
+        ),
+    ),
+    (
+        {
+            "reserva",
+            "reservas",
+            "reservar",
+            "cita",
+            "citas",
+            "booking",
+            "book",
+            "appointment",
+        },
+        (
+            "reservar",
+            "reserva",
+            "pedir cita",
+            "reservar cita",
+            "booking",
+            "book",
+            "appointment",
+        ),
+    ),
+    (
+        {
+            "contacto",
+            "telefono",
+            "whatsapp",
+            "persona",
+            "contact",
+            "phone",
+            "human",
+        },
+        (
+            "contacto",
+            "telefono",
+            "whatsapp",
+            "hablar con una persona",
+            "contact",
+            "phone",
+            "speak to someone",
+        ),
+    ),
+)
+
+
+def _normalize_faq_suggestion_text(
+    value: str,
+) -> str:
+    normalized = unicodedata.normalize(
+        "NFKD",
+        value,
+    )
+    normalized = "".join(
+        character
+        for character in normalized
+        if not unicodedata.combining(character)
+    )
+
+    return " ".join(
+        re.findall(
+            r"[a-z0-9]+",
+            normalized.casefold(),
+        )
+    )
+
+
+def _suggest_faq_keywords(
+    question: str,
+    answer_es: str,
+    answer_en: str,
+    *,
+    limit: int = 12,
+) -> list[str]:
+    question_normalized = (
+        _normalize_faq_suggestion_text(
+            question
+        )
+    )
+
+    source = " ".join(
+        part
+        for part in (
+            question_normalized,
+            _normalize_faq_suggestion_text(
+                answer_es
+            ),
+            _normalize_faq_suggestion_text(
+                answer_en
+            ),
+        )
+        if part
+    )
+
+    source_words = set(
+        source.split()
+    )
+    suggestions: list[str] = []
+
+    def add(value: str) -> None:
+        normalized_value = (
+            _normalize_faq_suggestion_text(
+                value
+            )
+        )
+
+        if (
+            normalized_value
+            and normalized_value
+            not in suggestions
+        ):
+            suggestions.append(
+                normalized_value
+            )
+
+    if question_normalized:
+        add(question_normalized)
+
+    for trigger_words, topic_suggestions in (
+        _FAQ_SUGGESTION_TOPICS
+    ):
+        if source_words.intersection(
+            trigger_words
+        ):
+            for suggestion in topic_suggestions:
+                add(suggestion)
+
+    for word in source.split():
+        if (
+            len(word) >= 4
+            and word
+            not in _FAQ_SUGGESTION_STOPWORDS
+        ):
+            add(word)
+
+    return suggestions[:limit]
 
 
 class InstanceDefinitionRepositoryProtocol(
@@ -183,6 +496,8 @@ def build_admin_faq_router(
                     rows="6"
                 >{escape(form_values["answer_en"])}</textarea>
             </label>
+
+            {_render_faq_suggestion_controls(definition.id)}
 
             <button
                 class="primary-button"
@@ -348,6 +663,45 @@ def build_admin_faq_router(
             ),
             status_code=303,
         )
+
+    @router.post(
+        "/admin/clients/{client_id}/faq/suggestions",
+    )
+    async def suggest_admin_faq_keywords(
+        client_id: str,
+        request: Request,
+    ) -> Response:
+        definition = definition_loader(
+            client_id
+        )
+
+        if definition is None:
+            return _not_found_response(
+                page_renderer
+            )
+
+        values = await _parse_form(
+            request
+        )
+
+        suggestions = _suggest_faq_keywords(
+            question=values.get(
+                "question",
+                "",
+            ),
+            answer_es=values.get(
+                "answer_es",
+                "",
+            ),
+            answer_en=values.get(
+                "answer_en",
+                "",
+            ),
+        )
+
+        return JSONResponse({
+            "keywords": suggestions,
+        })
 
     @router.get(
         "/admin/clients/{client_id}/faq/{faq_id}/edit",
@@ -633,6 +987,159 @@ def build_admin_faq_router(
     return router
 
 
+def _render_faq_suggestion_controls(
+    client_id: str,
+) -> str:
+    suggestions_url = (
+        "/admin/clients/"
+        f"{escape(client_id, quote=True)}"
+        "/faq/suggestions"
+    )
+
+    return f"""
+    <div class="actions">
+        <button
+            class="button secondary"
+            type="button"
+            data-faq-suggest
+        >
+            Sugerir triggers
+        </button>
+        <span
+            class="muted"
+            data-faq-suggest-status
+        ></span>
+    </div>
+
+    <script>
+    (() => {{
+        const button = document.querySelector(
+            "[data-faq-suggest]"
+        );
+        const status = document.querySelector(
+            "[data-faq-suggest-status]"
+        );
+        const keywords = document.querySelector(
+            '[name="keywords"]'
+        );
+
+        if (!button || !keywords) {{
+            return;
+        }}
+
+        button.addEventListener(
+            "click",
+            async () => {{
+                button.disabled = true;
+
+                if (status) {{
+                    status.textContent = (
+                        "Generando sugerencias..."
+                    );
+                }}
+
+                const params = new URLSearchParams();
+
+                for (
+                    const name
+                    of [
+                        "question",
+                        "answer_es",
+                        "answer_en",
+                    ]
+                ) {{
+                    const field = (
+                        document.querySelector(
+                            '[name="' + name + '"]'
+                        )
+                    );
+
+                    params.set(
+                        name,
+                        field ? field.value : ""
+                    );
+                }}
+
+                try {{
+                    const response = await fetch(
+                        "{suggestions_url}",
+                        {{
+                            method: "POST",
+                            headers: {{
+                                "Content-Type": (
+                                    "application/"
+                                    + "x-www-form-urlencoded"
+                                    + ";charset=UTF-8"
+                                ),
+                            }},
+                            body: params.toString(),
+                        }}
+                    );
+
+                    if (!response.ok) {{
+                        throw new Error(
+                            "suggestion request failed"
+                        );
+                    }}
+
+                    const payload = (
+                        await response.json()
+                    );
+
+                    const current = (
+                        keywords.value
+                        .split(/\\r?\\n/)
+                        .map(
+                            value => value.trim()
+                        )
+                        .filter(Boolean)
+                    );
+
+                    const merged = [...current];
+
+                    for (
+                        const suggestion
+                        of payload.keywords || []
+                    ) {{
+                        if (
+                            suggestion
+                            && !merged.includes(
+                                suggestion
+                            )
+                        ) {{
+                            merged.push(
+                                suggestion
+                            );
+                        }}
+                    }}
+
+                    keywords.value = (
+                        merged.join("\\n")
+                    );
+
+                    if (status) {{
+                        status.textContent = (
+                            "Sugerencias listas "
+                            + "para revisar."
+                        );
+                    }}
+                }} catch (error) {{
+                    if (status) {{
+                        status.textContent = (
+                            "No se pudieron generar "
+                            + "sugerencias."
+                        );
+                    }}
+                }} finally {{
+                    button.disabled = false;
+                }}
+            }}
+        );
+    }})();
+    </script>
+    """
+
+
 def _render_existing_faq_form(
     *,
     definition: InstanceDefinition,
@@ -720,6 +1227,8 @@ def _render_existing_faq_form(
                 rows="6"
             >{escape(form_values["answer_en"])}</textarea>
         </label>
+
+        {_render_faq_suggestion_controls(definition.id)}
 
         <button
             class="primary-button"

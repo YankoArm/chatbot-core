@@ -2451,3 +2451,98 @@ def test_admin_rejects_reused_google_calendar_id(
     assert definition.calendar_id == "calendar-sur"
 
     repository.close()
+
+
+def test_admin_faq_form_offers_trigger_suggestions(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salon Centro",
+            template_id="hairdressing",
+            settings={
+                "knowledge": {
+                    "faq": {},
+                },
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    response = client.get(
+        "/admin/clients/salon_centro/faq/new"
+    )
+
+    assert response.status_code == 200
+    assert "Sugerir triggers" in response.text
+    assert (
+        "/admin/clients/salon_centro/faq/suggestions"
+        in response.text
+    )
+
+    repository.close()
+
+
+def test_admin_suggests_faq_payment_keywords(
+) -> None:
+    repository = (
+        SQLiteInstanceDefinitionRepository(
+            database_path=":memory:",
+        )
+    )
+    repository.save(
+        InstanceDefinition(
+            id="salon_centro",
+            name="Salon Centro",
+            template_id="hairdressing",
+            settings={
+                "knowledge": {
+                    "faq": {},
+                },
+            },
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(
+        app
+    )
+
+    response = client.post(
+        "/admin/clients/salon_centro/faq/suggestions",
+        data={
+            "question": "Como puedo pagar?",
+            "answer_es": (
+                "Aceptamos tarjeta, efectivo y Bizum."
+            ),
+            "answer_en": "",
+        },
+    )
+
+    assert response.status_code == 200
+
+    keywords = response.json()[
+        "keywords"
+    ]
+
+    assert "formas de pago" in keywords
+    assert "como pagar" in keywords
+    assert "tarjeta" in keywords
+    assert "bizum" in keywords
+
+    repository.close()
