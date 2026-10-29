@@ -230,6 +230,25 @@ class FlowForgeApplication:
             prepared_context.knowledge_service
         )
 
+        prepared_variables = getattr(
+            prepared_context,
+            "variables",
+            None,
+        )
+        context_variables = getattr(
+            context,
+            "variables",
+            None,
+        )
+
+        if (
+            isinstance(prepared_variables, dict)
+            and isinstance(context_variables, dict)
+        ):
+            context_variables.update(
+                prepared_variables
+            )
+
     def _ensure_conversation_language(
         self,
         context: Any,

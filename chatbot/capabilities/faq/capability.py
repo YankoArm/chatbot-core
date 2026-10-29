@@ -136,20 +136,25 @@ class FAQCapability(BaseCapability):
             else None
         )
 
+        configured_answer = self._find_answer(
+            context=context,
+            message=message,
+            language=language,
+        )
+
         catalog_answer = build_service_catalog_answer(
             services=services,
             message=message,
             language=language,
         )
 
-        answer = (
-            catalog_answer
-            or self._find_answer(
-                context=context,
-                message=message,
-                language=language,
-            )
-        )
+        answer = configured_answer
+
+        if (
+            answer is None
+            or self._is_placeholder_answer(answer)
+        ):
+            answer = catalog_answer or answer
 
         return Response(
             text=answer or _FALLBACK_RESPONSES[language],
@@ -159,6 +164,36 @@ class FAQCapability(BaseCapability):
                 "language": language.value,
                 "answer_found": answer is not None,
             },
+        )
+
+    @staticmethod
+    def _is_placeholder_answer(
+        answer: str,
+    ) -> bool:
+        """
+        Return whether an FAQ answer is only a temporary placeholder.
+
+        Real configured FAQ answers keep priority over the service
+        catalog. Placeholder answers may be replaced by catalog data.
+        """
+
+        normalized_answer = (
+            FAQCapability._normalize_text(answer)
+        )
+
+        placeholder_fragments = {
+            "todavia no esta configurado",
+            "todavia no estan configurados",
+            "proximamente anadiremos",
+            "proximamente incluiremos",
+            "not configured yet",
+            "not yet configured",
+            "coming soon",
+        }
+
+        return any(
+            fragment in normalized_answer
+            for fragment in placeholder_fragments
         )
 
     def _find_answer(

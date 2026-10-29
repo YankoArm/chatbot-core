@@ -58,10 +58,12 @@ class StaleKnowledgeService:
                 ],
                 "answers": {
                     "es": (
-                        "RESPUESTA ANTIGUA QUE NO DEBE USARSE"
+                        "Tarot Alvin ofrece sesiones de tarot personalizadas. "
+                    "Pr\u00f3ximamente a\u00f1adiremos aqu\u00ed la informaci\u00f3n detallada "
+                    "de cada modalidad."
                     ),
                     "en": (
-                        "OLD ANSWER THAT MUST NOT BE USED"
+                        "Tarot Alvin offers personalized tarot sessions. Coming soon we will add detailed information about each option."
                     ),
                 },
             },
