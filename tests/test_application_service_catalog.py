@@ -76,3 +76,57 @@ def test_application_exposes_service_catalog_to_faq():
         "todavia no esta configurado"
         not in response.text.lower()
     )
+
+
+def test_bootstrap_exposes_instance_services_to_booking():
+    definition = create_tarot_alvin_definition()
+    definition.settings["services"] = SERVICES
+
+    instance = build_instance_from_definition(
+        definition
+    )
+
+    application = Bootstrap().build_from_instance(
+        instance
+    )
+
+    session_id = "booking-service-catalog-test"
+
+    application.chat(
+        session_id=session_id,
+        message="TAROT",
+    )
+
+    application.chat(
+        session_id=session_id,
+        message="Quiero hablar con una persona",
+    )
+
+    switch_response = application.chat(
+        session_id=session_id,
+        message="Quiero reservar una cita",
+    )
+
+    assert (
+        switch_response.metadata[
+            "flow_switch_confirmation"
+        ]
+        is True
+    )
+
+    booking_response = application.chat(
+        session_id=session_id,
+        message="Si",
+    )
+
+    assert booking_response.metadata["capability"] == "booking"
+    assert booking_response.metadata["booking_step"] == "service"
+
+    assert (
+        "Lectura de tarot 30 minutos"
+        in booking_response.text
+    )
+    assert (
+        "Lectura de tarot 1 hora"
+        in booking_response.text
+    )

@@ -79,6 +79,8 @@ class FAQCapability(BaseCapability):
     """
 
     name = "faq"
+    interrupts_active_flow = True
+    preserves_active_flow = True
     version = "1.0"
     dependencies: list[str] = []
 

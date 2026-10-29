@@ -345,8 +345,11 @@ def test_hairdressing_demo_allows_human_transfer_during_booking():
         message="Quiero reservar",
     )
 
-    assert "¿Cómo te llamas?" in booking_response.text
-
+    assert (
+        "\u00bfQu\u00e9 servicio quieres reservar?"
+        in booking_response.text
+    )
+    assert booking_response.metadata["booking_step"] == "service"
     transfer_response = app.chat(
         session_id=session_id,
         message="Quiero hablar con una persona",
@@ -417,8 +420,159 @@ def test_hairdressing_demo_preserves_booking_after_help():
 
     continued_response = app.chat(
         session_id=session_id,
+        message="Corte de mujer",
+    )
+
+    assert "\u00bfC\u00f3mo te llamas?" in continued_response.text
+    assert continued_response.metadata["booking_step"] == "name"
+
+    name_response = app.chat(
+        session_id=session_id,
         message="Yanko",
     )
 
-    assert "¿Cuál es tu número de teléfono?" in continued_response.text
+    assert (
+        "\u00bfCu\u00e1l es tu n\u00famero de tel\u00e9fono?"
+        in name_response.text
+    )
+    assert name_response.metadata["booking_step"] == "phone"
     assert continued_response.metadata["capability"] == "booking"
+
+def test_human_transfer_allows_faq_without_consuming_reason():
+    app = build_hairdressing_demo_application()
+    session_id = "human-transfer-faq-interruption"
+
+    app.chat(
+        session_id=session_id,
+        message="Peluquer\u00eda",
+    )
+
+    app.chat(
+        session_id=session_id,
+        message="Quiero hablar con una persona",
+    )
+
+    faq_response = app.chat(
+        session_id=session_id,
+        message="\u00bfQu\u00e9 servicios y precios ten\u00e9is?",
+    )
+
+    assert "corte de mujer" in faq_response.text.lower()
+    assert faq_response.metadata["capability"] == "faq"
+
+    transfer_response = app.chat(
+        session_id=session_id,
+        message="Necesito asesoramiento para mi cabello.",
+    )
+
+    assert (
+        transfer_response.metadata[
+            "human_transfer_requested"
+        ]
+        is True
+    )
+
+
+def test_human_transfer_requests_confirmation_before_booking():
+    app = build_hairdressing_demo_application()
+    session_id = "human-transfer-booking-switch"
+
+    app.chat(
+        session_id=session_id,
+        message="Peluquer\u00eda",
+    )
+
+    app.chat(
+        session_id=session_id,
+        message="Quiero hablar con una persona",
+    )
+
+    response = app.chat(
+        session_id=session_id,
+        message="Quiero reservar una cita",
+    )
+
+    assert (
+        response.metadata["flow_switch_confirmation"]
+        is True
+    )
+    assert response.metadata["flow_switch_to"] == "booking"
+
+    booking_response = app.chat(
+        session_id=session_id,
+        message="S\u00ed",
+    )
+
+    assert booking_response.metadata["capability"] == "booking"
+    assert booking_response.metadata["booking_step"] == "service"
+    assert (
+        "servicio quieres reservar"
+        in booking_response.text.lower()
+    )
+
+
+def test_human_transfer_keeps_flow_when_booking_switch_is_rejected():
+    app = build_hairdressing_demo_application()
+    session_id = "human-transfer-booking-rejected"
+
+    app.chat(
+        session_id=session_id,
+        message="Peluquer\u00eda",
+    )
+
+    app.chat(
+        session_id=session_id,
+        message="Quiero hablar con una persona",
+    )
+
+    app.chat(
+        session_id=session_id,
+        message="Quiero reservar una cita",
+    )
+
+    rejection = app.chat(
+        session_id=session_id,
+        message="No",
+    )
+
+    assert rejection.metadata["flow_switch_rejected"] is True
+
+    transfer_response = app.chat(
+        session_id=session_id,
+        message="Necesito resolver una duda personal.",
+    )
+
+    assert (
+        transfer_response.metadata[
+            "human_transfer_requested"
+        ]
+        is True
+    )
+
+
+def test_human_transfer_does_not_switch_for_ambiguous_appointment_reference():
+    app = build_hairdressing_demo_application()
+    session_id = "human-transfer-ambiguous-appointment"
+
+    app.chat(
+        session_id=session_id,
+        message="Peluquer\u00eda",
+    )
+
+    app.chat(
+        session_id=session_id,
+        message="Quiero hablar con una persona",
+    )
+
+    response = app.chat(
+        session_id=session_id,
+        message="Tengo un problema con mi cita",
+    )
+
+    assert (
+        response.metadata[
+            "human_transfer_requested"
+        ]
+        is True
+    )
+    assert "flow_switch_confirmation" not in response.metadata

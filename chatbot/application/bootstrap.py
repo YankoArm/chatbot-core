@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from chatbot.booking.configuration import build_booking_configuration
+from chatbot.capabilities.booking import BookingCapability
+
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
@@ -245,7 +248,8 @@ class Bootstrap:
                 )
 
             capability = self._create_capability(
-                normalized_name
+                normalized_name,
+                instance=instance,
             )
 
             capability_manager.register(capability)
@@ -256,6 +260,8 @@ class Bootstrap:
     def _create_capability(
         self,
         capability_name: str,
+        *,
+        instance: Instance | None = None,
     ) -> BaseCapability:
         """
         Create a capability using an injected factory when available.
@@ -269,6 +275,39 @@ class Bootstrap:
         )
 
         if capability_factory is None:
+            if (
+                capability_name == "booking"
+                and instance is not None
+            ):
+                booking_settings = instance.settings.get(
+                    "booking"
+                )
+
+                if (
+                    isinstance(booking_settings, dict)
+                    and booking_settings.get(
+                        "enabled",
+                        False,
+                    )
+                ):
+                    booking_configuration = (
+                        build_booking_configuration(
+                            instance
+                        )
+                    )
+
+                    return BookingCapability(
+                        business_hours=(
+                            booking_configuration.business_hours
+                        ),
+                        booking_rules=(
+                            booking_configuration.booking_rules
+                        ),
+                        services=(
+                            booking_configuration.services
+                        ),
+                    )
+
             return self._capability_registry.create(
                 capability_name
             )
