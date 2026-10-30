@@ -4,6 +4,7 @@ from copy import deepcopy
 from dataclasses import replace
 from html import escape
 import re
+import unicodedata
 from urllib.parse import parse_qs
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from typing import Protocol
@@ -446,6 +447,67 @@ def build_admin_router(
 ) -> APIRouter:
     router = APIRouter()
 
+    def client_id_exists(
+        candidate: str,
+    ) -> bool:
+        if candidate in list_client_ids():
+            return True
+
+        if instance_definition_repository is None:
+            return False
+
+        return (
+            instance_definition_repository.get(
+                candidate
+            )
+            is not None
+        )
+
+    def build_available_client_id(
+        business_name: str,
+    ) -> str:
+        normalized_name = unicodedata.normalize(
+            "NFKD",
+            business_name,
+        )
+
+        ascii_name = (
+            normalized_name
+            .encode("ascii", "ignore")
+            .decode("ascii")
+            .casefold()
+        )
+
+        base_id = re.sub(
+            r"[^a-z0-9]+",
+            "_",
+            ascii_name,
+        ).strip("_")
+
+        if not base_id:
+            base_id = "bot"
+        elif not base_id[0].isalpha():
+            base_id = f"bot_{base_id}"
+
+        if len(base_id) < 3:
+            base_id = f"{base_id}_bot"
+
+        base_id = base_id[:64].rstrip("_")
+
+        candidate = base_id
+        suffix_number = 2
+
+        while client_id_exists(candidate):
+            suffix = f"_{suffix_number}"
+            prefix = base_id[
+                : 64 - len(suffix)
+            ].rstrip("_")
+
+            candidate = f"{prefix}{suffix}"
+            suffix_number += 1
+
+        return candidate
+
     def load_instances(
     ) -> tuple[Instance, ...]:
         instances_by_id = {
@@ -560,19 +622,12 @@ def build_admin_router(
                 method="post"
                 action="/admin/clients"
             >
-                <label>
-                    <span>Identificador</span>
-                    <input
-                        name="client_id"
-                        value="{escape(client_id)}"
-                        placeholder="salon_centro"
-                        required
-                        pattern="[a-z][a-z0-9_]*"
-                    >
-                    <small>
-                        Minúsculas, números y guiones bajos.
-                    </small>
-                </label>
+                <input
+                    type="hidden"
+                    name="client_id"
+                    value="{escape(client_id)}"
+                >
+
 
                 <label>
                     <span>Nombre comercial</span>
@@ -582,6 +637,11 @@ def build_admin_router(
                         placeholder="Salón Centro"
                         required
                     >
+                    <small>
+                        El identificador interno se genera
+                        autom?ticamente a partir del nombre.
+                    </small>
+
                 </label>
 
                 <label>
@@ -861,36 +921,45 @@ def build_admin_router(
             )[0].strip()
         )
 
+        requested_client_id = client_id
+
         error: str | None = None
         status_code = 422
 
-        if not re.fullmatch(
-            r"[a-z][a-z0-9_]{2,63}",
-            client_id,
-        ):
-            error = (
-                "El identificador debe tener entre 3 y 64 "
-                "caracteres y usar minúsculas, números "
-                "o guiones bajos."
-            )
-        elif not name:
+        if not name:
             error = (
                 "El nombre comercial es obligatorio."
             )
         elif template_id not in list_template_ids():
             error = (
-                "La plantilla seleccionada no es válida."
+                "La plantilla seleccionada no es v?lida."
             )
         elif (
-            client_id in list_client_ids()
-            or instance_definition_repository.get(
-                client_id
-            ) is not None
+            requested_client_id
+            and not re.fullmatch(
+                r"[a-z][a-z0-9_]{2,63}",
+                requested_client_id,
+            )
+        ):
+            error = (
+                "El identificador debe tener entre 3 y 64 "
+                "caracteres y usar min?sculas, n?meros "
+                "o guiones bajos."
+            )
+        elif (
+            requested_client_id
+            and client_id_exists(
+                requested_client_id
+            )
         ):
             error = (
                 "Ya existe un bot con ese identificador."
             )
             status_code = 409
+        elif not requested_client_id:
+            client_id = build_available_client_id(
+                name
+            )
 
         if error is not None:
             return HTMLResponse(

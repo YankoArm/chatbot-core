@@ -520,19 +520,50 @@ def _render_preview_suggestions(
     </div>
     <script>
         (() => {{
-            const conversation = document.querySelector(
-                ".preview-conversation"
-            );
+            const restorePreviewPosition = () => {{
+                const conversation = document.querySelector(
+                    ".preview-conversation"
+                );
+                const messageInput = document.getElementById(
+                    "preview-message"
+                );
+
+                const hasConversation = (
+                    conversation &&
+                    conversation.querySelector(".definition")
+                );
+
+                if (hasConversation) {{
+                    conversation.scrollTop = (
+                        conversation.scrollHeight
+                    );
+                }}
+
+                if (
+                    hasConversation &&
+                    messageInput
+                ) {{
+                    messageInput.scrollIntoView({{
+                        block: "center",
+                    }});
+
+                    messageInput.focus({{
+                        preventScroll: true,
+                    }});
+                }}
+            }};
 
             if (
-                conversation &&
-                conversation.querySelector(".definition")
+                document.readyState === "loading"
             ) {{
-                conversation.scrollIntoView({{
-                    block: "end",
-                }});
+                document.addEventListener(
+                    "DOMContentLoaded",
+                    restorePreviewPosition,
+                    {{ once: true }},
+                );
+            }} else {{
+                restorePreviewPosition();
             }}
-
         }})();
     </script>
     """

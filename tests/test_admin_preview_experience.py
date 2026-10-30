@@ -42,6 +42,10 @@ def test_preview_offers_suggestions_and_scrolls_to_latest_turn() -> None:
     assert 'data-preview-message' not in response.text
     assert "scrollIntoView" in response.text
     assert "preview-conversation" in response.text
+    assert "conversation.scrollIntoView" not in response.text
+    assert "messageInput.scrollIntoView" in response.text
+    assert "preventScroll" in response.text
+    assert "DOMContentLoaded" in response.text
 
 def test_preview_processes_suggestion_without_manual_message() -> None:
     app = build_whatsapp_api(

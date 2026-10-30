@@ -2658,3 +2658,81 @@ def test_admin_business_saves_guided_menu(
     }
 
     repository.close()
+
+def test_admin_generates_client_id_from_business_name() -> None:
+    repository = SQLiteInstanceDefinitionRepository(
+        database_path=":memory:",
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/admin/clients",
+        data={
+            "name": "Cl\u00ednica Dental Sol",
+            "template_id": "hairdressing",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/admin/clients/clinica_dental_sol"
+    )
+
+    definition = repository.get(
+        "clinica_dental_sol"
+    )
+
+    assert definition is not None
+    assert definition.name == "Cl\u00ednica Dental Sol"
+
+    repository.close()
+
+
+def test_admin_generated_client_id_avoids_collisions() -> None:
+    repository = SQLiteInstanceDefinitionRepository(
+        database_path=":memory:",
+    )
+
+    repository.save(
+        InstanceDefinition(
+            id="clinica_dental_sol",
+            name="Cl\u00ednica Dental Sol",
+            template_id="hairdressing",
+            settings={},
+        )
+    )
+
+    app = build_whatsapp_api(
+        message_handler=NoOpMessageHandler(),
+        instance_definition_repository=repository,
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/admin/clients",
+        data={
+            "name": "Cl\u00ednica Dental Sol",
+            "template_id": "hairdressing",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/admin/clients/clinica_dental_sol_2"
+    )
+
+    assert (
+        repository.get(
+            "clinica_dental_sol_2"
+        )
+        is not None
+    )
+
+    repository.close()
