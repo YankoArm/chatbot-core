@@ -24,7 +24,7 @@ from chatbot.instances import (
 from urllib.parse import parse_qs
 
 
-_MAX_PREVIEW_MESSAGES = 12
+_MAX_PREVIEW_MESSAGES = 50
 
 
 class InstanceDefinitionRepositoryProtocol(
