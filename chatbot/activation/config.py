@@ -26,3 +26,17 @@ class ActivationConfig:
     prompt_cooldown: int = 60
 
     session_timeout: int | None = None
+
+    prompt_messages: dict[str, str] = field(
+        default_factory=dict
+    )
+
+    activated_messages: dict[str, str] = field(
+        default_factory=dict
+    )
+
+    remind_on_cooldown: bool = False
+
+    reminder_messages: dict[str, str] = field(
+        default_factory=dict
+    )

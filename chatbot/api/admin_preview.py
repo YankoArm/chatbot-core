@@ -107,6 +107,10 @@ def build_admin_preview_router(
                 if capability_name != "booking"
             ],
             settings=settings,
+            activation=replace(
+                instance.activation,
+                remind_on_cooldown=True,
+            ),
         )
     def run_preview(
         definition: InstanceDefinition,

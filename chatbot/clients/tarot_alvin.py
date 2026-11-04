@@ -74,6 +74,19 @@ def create_tarot_alvin_definition() -> InstanceDefinition:
             ),
             prompt_cooldown=60,
             session_timeout=3600,
+            prompt_messages={
+                "en": (
+                    "Hello, you're speaking with Alvin's automated "
+                    "assistant.\n\n"
+                    "To activate the tarot service, type TAROT."
+                ),
+            },
+            activated_messages={
+                "en": (
+                    "Tarot service activated successfully.\n\n"
+                    "How can I help you?"
+                ),
+            },
         ),
         metadata={
             "owner": "Tarot Alvin",

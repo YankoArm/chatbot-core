@@ -50,11 +50,9 @@ class FlowForgeApplication:
         """
         Process a user message within a conversation session.
 
-        Activation rules are evaluated before language detection so
-        activation commands do not determine the conversation language.
-
-        Once the assistant is active, the detected language is persisted
-        and reused during the remainder of the session.
+        Activation commands do not determine the conversation language.
+        Non-activation messages can establish the language while prompting
+        for activation, and it is preserved during the session.
 
         Instance-specific services, such as the knowledge service, are
         attached to the context before conversational processing begins.
@@ -309,7 +307,75 @@ class FlowForgeApplication:
         if decision.continue_processing:
             return None
 
-        return decision.response
+        response = decision.response
+        if response is None:
+            return None
+
+        activation = getattr(self.instance, "activation", None)
+        if activation is None:
+            return response
+
+        if not response.text:
+            if not (
+                getattr(activation, "remind_on_cooldown", False)
+                and not context.activation_state.active
+            ):
+                return response
+
+            self._ensure_conversation_language(
+                context=context,
+                message=message,
+            )
+
+            language = (
+                context.language
+                or self._get_default_language()
+            )
+            code = getattr(language, "value", language)
+
+            reminder = activation.reminder_messages.get(code)
+
+            if not reminder:
+                phrases = activation.phrases
+                phrase = phrases[0].upper() if phrases else ""
+
+                if phrase and code == "en":
+                    reminder = (
+                        f"To continue, please type {phrase}."
+                    )
+                elif phrase and code == "es":
+                    reminder = (
+                        f"Para continuar, escribe {phrase}."
+                    )
+                else:
+                    reminder = (
+                        activation.prompt_messages.get(code)
+                        or activation.prompt_message
+                    )
+
+            return Response(text=reminder)
+
+        if context.activation_state.active:
+            localized_messages = getattr(
+                activation, "activated_messages", {}
+            )
+        else:
+            self._ensure_conversation_language(
+                context=context,
+                message=message,
+            )
+            localized_messages = getattr(
+                activation, "prompt_messages", {}
+            )
+
+        language = context.language or self._get_default_language()
+        language_code = getattr(language, "value", language)
+
+        localized_text = localized_messages.get(language_code)
+        if localized_text:
+            return Response(text=localized_text)
+
+        return response
 
     def _get_default_language(self) -> Language:
         """
