@@ -703,6 +703,7 @@ def build_admin_router(
         timezone: str | None = None,
         whatsapp_phone_number_id: str | None = None,
         calendar_id: str | None = None,
+        channel_mode: str | None = None,
     ) -> str:
         visible_name = (
             definition.name
@@ -740,6 +741,37 @@ def build_admin_router(
             if calendar_id is None
             else calendar_id
         )
+
+
+        configured_mode = definition.metadata.get(
+            "channel_mode"
+        )
+
+        selected_mode = (
+            channel_mode
+            if channel_mode is not None
+            else (
+                configured_mode
+                if configured_mode in CHANNEL_MODES
+                else "legacy"
+            )
+        )
+
+        legacy_option = ""
+
+        if configured_mode not in CHANNEL_MODES:
+            legacy_selected = (
+                " selected"
+                if selected_mode == "legacy"
+                else ""
+            )
+
+            legacy_option = (
+                '<option value="legacy"'
+                f'{legacy_selected}>'
+                'Conservar configuracion heredada'
+                '</option>'
+            )
 
         error_html = ""
 
@@ -781,6 +813,31 @@ def build_admin_router(
                 method="post"
                 action="/admin/clients/{escape(definition.id)}"
             >
+
+                <label>
+                    <span>Canales de atenci&oacute;n</span>
+                    <select name="channel_mode" required>
+                        {legacy_option}
+                        <option value="whatsapp"
+                            {"selected" if selected_mode == "whatsapp" else ""}>
+                            Solo WhatsApp
+                        </option>
+                        <option value="web"
+                            {"selected" if selected_mode == "web" else ""}>
+                            Solo Chat Web
+                        </option>
+                        <option value="both"
+                            {"selected" if selected_mode == "both" else ""}>
+                            Ambos - WhatsApp y Chat Web
+                        </option>
+                    </select>
+                    <small>
+                        Puedes cambiar los canales cuando
+                        lo necesites. Cada integraci&oacute;n
+                        debe configurarse por separado.
+                    </small>
+                </label>
+
                 <label>
                     <span>Identificador</span>
                     <input
@@ -1163,7 +1220,33 @@ def build_admin_router(
             )[0].strip()
             or None
         )
+
+        existing_mode = definition.metadata.get(
+            "channel_mode"
+        )
+
+        legacy_client = existing_mode not in CHANNEL_MODES
+
+        default_mode = (
+            "legacy"
+            if legacy_client
+            else existing_mode
+        )
+
+        channel_mode = form_data.get(
+            "channel_mode",
+            [default_mode],
+        )[0].strip()
+
         error: str | None = None
+        if (
+            channel_mode not in CHANNEL_MODES
+            and not (
+                channel_mode == "legacy"
+                and legacy_client
+            )
+        ):
+            error = "El canal seleccionado no es valido."
 
         if not name:
             error = (
@@ -1238,6 +1321,7 @@ def build_admin_router(
                             whatsapp_phone_number_id
                         ),
                         calendar_id=calendar_id,
+                        channel_mode=channel_mode,
                     ),
                 ),
                 status_code=422,
@@ -1263,8 +1347,18 @@ def build_admin_router(
             "timezone"
         ] = timezone
 
+
+        updated_metadata = dict(definition.metadata)
+        updated_channels = list(definition.channels)
+
+        if channel_mode in CHANNEL_MODES:
+            updated_metadata["channel_mode"] = channel_mode
+            updated_channels = channels_for_mode(channel_mode)
+
         updated_definition = replace(
             definition,
+            channels=updated_channels,
+            metadata=updated_metadata,
             name=name,
             default_language=default_language,
             whatsapp_phone_number_id=(
