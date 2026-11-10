@@ -14,6 +14,9 @@ from typing import Protocol
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from chatbot.api.admin_web_chat import (
+    build_admin_web_chat_router,
+)
 from chatbot.api.admin_business import (
     build_admin_business_router,
 )
@@ -1454,6 +1457,12 @@ def build_admin_router(
     )
 
     router.include_router(
+        build_admin_web_chat_router(
+            instance_definition_repository=instance_definition_repository,
+            page_renderer=_render_page,
+        )
+    )
+    router.include_router(
         build_admin_business_router(
             instance_definition_repository=(
                 instance_definition_repository
@@ -1565,6 +1574,12 @@ def _render_client_detail(
         href="/admin/clients/{escape(instance.id)}/leads"
     >
         Solicitudes recibidas
+    </a>
+    <a
+        class="primary-button"
+        href="/admin/clients/{escape(instance.id)}/web-chat"
+    >
+        Chat Web
     </a>
     <section class="panel">
         <div class="definition-grid">
