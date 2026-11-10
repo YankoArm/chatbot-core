@@ -105,6 +105,21 @@ class HumanTransferCapability(BaseCapability):
             for keyword in language_keywords
         }
 
+        flexible_patterns = (
+            r"\bhablar(?:\s+\w+){0,3}\s+con"
+            r"(?:\s+\w+){0,2}\s+"
+            r"(?:persona|alguien|agente|operador|humano)\b",
+            r"\b(?:speak|talk)(?:\s+\w+){0,3}\s+"
+            r"(?:to|with)(?:\s+\w+){0,2}\s+"
+            r"(?:person|someone|agent|operator|human)\b",
+        )
+
+        if any(
+            re.search(pattern, normalized_message)
+            for pattern in flexible_patterns
+        ):
+            return True
+
         return any(
             keyword in normalized_message
             for keyword in keywords

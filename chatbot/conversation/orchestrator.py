@@ -431,6 +431,43 @@ class ConversationOrchestrator:
             ):
                 continue
 
+            # A pending human-transfer reason takes priority over
+            # incidental booking keywords. Explicit booking requests
+            # are handled earlier by _offer_flow_switch.
+            if (
+                context.active_capability == "human_transfer"
+                and capability.name == "booking"
+            ):
+                continue
+
+            # A support problem is the reason for human assistance,
+            # not a general FAQ request.
+            if (
+                context.active_capability == "human_transfer"
+                and capability.name == "faq"
+            ):
+                normalized_reason = self._normalize_control_text(
+                    message
+                )
+                support_reason_markers = (
+                    "problema con",
+                    "problema en",
+                    "necesito ayuda con",
+                    "incidencia",
+                    "reclamacion",
+                    "queja",
+                    "problem with",
+                    "issue with",
+                    "need help with",
+                    "complaint",
+                )
+
+                if any(
+                    marker in normalized_reason
+                    for marker in support_reason_markers
+                ):
+                    continue
+
             if not capability.can_handle(
                 context,
                 message,

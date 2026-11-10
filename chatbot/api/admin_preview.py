@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from chatbot.conversation.orchestrator import ConversationOrchestrator
+
 import json
 
 from collections.abc import Callable
@@ -320,20 +322,13 @@ def build_admin_preview_router(
 def _is_booking_preview_request(
     message: str,
 ) -> bool:
-    normalized_message = message.casefold()
-
-    booking_terms = (
-        "reservar",
-        "reserva",
-        "cita",
-        "booking",
-        "appointment",
+    # Only block explicit booking requests.
+    # Mentioning a booking as part of a support problem
+    # must not prevent human-transfer processing.
+    return ConversationOrchestrator._is_explicit_booking_request(
+        message
     )
 
-    return any(
-        term in normalized_message
-        for term in booking_terms
-    )
 
 def _parse_history(
     raw_history: str,
