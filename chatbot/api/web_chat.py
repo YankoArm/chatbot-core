@@ -26,6 +26,7 @@ class WebChatMessage(BaseModel):
 @dataclass
 class WebChatSession:
     widget_id: str
+    client_id: str
     application: Any
     last_seen: float
     message_times: deque = field(default_factory=deque)
@@ -136,6 +137,7 @@ def build_web_chat_router(
 
             sessions[token] = WebChatSession(
                 widget_id=widget_id,
+                client_id=definition.id,
                 application=application,
                 last_seen=now,
             )
@@ -154,7 +156,7 @@ def build_web_chat_router(
         payload: WebChatMessage,
         response: Response,
     ) -> dict[str, str]:
-        get_definition(widget_id)
+        definition = get_definition(widget_id)
         now = time.monotonic()
 
         with lock:
@@ -164,6 +166,7 @@ def build_web_chat_router(
             if (
                 session is None
                 or session.widget_id != widget_id
+                or session.client_id != definition.id
             ):
                 raise HTTPException(status_code=404)
 

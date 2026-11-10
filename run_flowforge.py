@@ -28,6 +28,7 @@ from chatbot.calendar.tenant_registry import (
 from chatbot.capabilities.booking import (
     BookingCapability,
 )
+from chatbot.api.web_chat_mount import mount_web_chat
 from chatbot.clients.registry import (
     build_client_instance,
     build_client_definition,
@@ -282,6 +283,7 @@ def create_app(
     instance_definition_repository: (
         SQLiteInstanceDefinitionRepository | None
     ) = None,
+    enable_web_chat: bool = False,
 ) -> FastAPI:
     """
     Build the FlowForge WhatsApp and administration application.
@@ -472,6 +474,20 @@ def create_app(
         admin_password=config.admin_password,
         admin_session_secret=config.admin_session_secret,
         admin_session_secure=config.admin_session_secure,
+    )
+
+    mount_web_chat(
+        app,
+        repository=instance_definition_repository,
+        application_factory=lambda definition: (
+            build_tenant_application(
+                definition=definition,
+                calendar_service=None,
+                booking_repository=None,
+                lead_repository=None,
+            )
+        ),
+        enabled=enable_web_chat,
     )
 
     app.state.flowforge_instance = instance
