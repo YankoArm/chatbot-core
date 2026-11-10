@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from chatbot.instances.channel_modes import CHANNEL_MODES, channels_for_mode
+
 from copy import deepcopy
 from typing import Any
 
@@ -38,10 +40,17 @@ class InstanceResolver:
             disabled=definition.disabled_connectors,
         )
 
-        channels = self._merge_named_items(
-            inherited=template.channels,
-            added=definition.channels,
+        selected_channel_mode = definition.metadata.get(
+            "channel_mode"
         )
+
+        if selected_channel_mode in CHANNEL_MODES:
+            channels = channels_for_mode(selected_channel_mode)
+        else:
+            channels = self._merge_named_items(
+                inherited=template.channels,
+                added=definition.channels,
+            )
 
         supported_languages = (
             list(definition.supported_languages)

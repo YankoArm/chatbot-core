@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from chatbot.instances.channel_modes import CHANNEL_MODES, channels_for_mode
+
 from copy import deepcopy
 from dataclasses import replace
 from html import escape
@@ -581,6 +583,7 @@ def build_admin_router(
         client_id: str = "",
         name: str = "",
         template_id: str = "",
+        channel_mode: str = "whatsapp",
     ) -> str:
 
         error_html = ""
@@ -655,6 +658,29 @@ def build_admin_router(
                         </option>
                         {template_options}
                     </select>
+                </label>
+
+
+                <label>
+                    <span>Canales de atenci&oacute;n</span>
+                    <select name="channel_mode" required>
+                        <option value="whatsapp"
+                            {"selected" if channel_mode == "whatsapp" else ""}>
+                            Solo WhatsApp
+                        </option>
+                        <option value="web"
+                            {"selected" if channel_mode == "web" else ""}>
+                            Solo Chat Web
+                        </option>
+                        <option value="both"
+                            {"selected" if channel_mode == "both" else ""}>
+                            Ambos - WhatsApp y Chat Web
+                        </option>
+                    </select>
+                    <small>
+                        Podr&aacute;s configurar los conectores
+                        de cada canal despu&eacute;s de crear el bot.
+                    </small>
                 </label>
 
                 <button
@@ -921,6 +947,10 @@ def build_admin_router(
             )[0].strip()
         )
 
+        channel_mode = form_data.get(
+            "channel_mode", ["whatsapp"]
+        )[0].strip()
+
         requested_client_id = client_id
 
         error: str | None = None
@@ -934,6 +964,8 @@ def build_admin_router(
             error = (
                 "La plantilla seleccionada no es v?lida."
             )
+        elif channel_mode not in CHANNEL_MODES:
+            error = "El canal seleccionado no es valido."
         elif (
             requested_client_id
             and not re.fullmatch(
@@ -970,6 +1002,7 @@ def build_admin_router(
                         client_id=client_id,
                         name=name,
                         template_id=template_id,
+                        channel_mode=channel_mode,
                     ),
                 ),
                 status_code=status_code,
@@ -979,6 +1012,7 @@ def build_admin_router(
             id=client_id,
             name=name,
             template_id=template_id,
+            channels=channels_for_mode(channel_mode),
             settings={
                 "branding": {
                     "display_name": name,
@@ -986,6 +1020,7 @@ def build_admin_router(
             },
             metadata={
                 "admin_status": "draft",
+                "channel_mode": channel_mode,
             },
         )
 
