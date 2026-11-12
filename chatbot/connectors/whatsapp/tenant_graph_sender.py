@@ -6,6 +6,8 @@ from chatbot.connectors.whatsapp.graph_sender import (
     WhatsAppGraphClientProtocol,
 )
 
+from chatbot.connectors.whatsapp.message_handler import WhatsAppButtonReply
+
 
 class WhatsAppGraphClientProviderProtocol(Protocol):
     def get_client(
@@ -54,3 +56,30 @@ class TenantWhatsAppGraphSender:
             to=recipient,
             text=text,
         )
+
+    def send_buttons(
+        self,
+        *,
+        recipient: str,
+        reply: WhatsAppButtonReply,
+        phone_number_id: str | None,
+    ) -> None:
+        if phone_number_id is None:
+            return
+
+        graph_client = self._graph_client_provider.get_client(phone_number_id)
+        if graph_client is None:
+            return
+
+        send_reply_buttons = getattr(graph_client, "send_reply_buttons", None)
+        if callable(send_reply_buttons):
+            send_reply_buttons(
+                to=recipient,
+                text=reply.text,
+                buttons=reply.buttons,
+            )
+        else:
+            graph_client.send_text_message(
+                to=recipient,
+                text=reply.fallback_text,
+            )

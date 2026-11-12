@@ -14,6 +14,13 @@ class IncomingWhatsAppMessage:
     phone_number_id: str | None = None
 
 
+@dataclass(frozen=True)
+class WhatsAppButtonReply:
+    text: str
+    buttons: tuple[tuple[str, str], ...]
+    fallback_text: str
+
+
 class WhatsAppParserProtocol(Protocol):
     def parse(
         self,
@@ -70,10 +77,7 @@ class WhatsAppMessageHandler:
         if self._parser is None:
             return None
 
-        parsed_message = self._parser.parse(
-            payload
-        )
-
+        parsed_message = self._parser.parse(payload)
         if parsed_message is None:
             return None
 
@@ -82,34 +86,38 @@ class WhatsAppMessageHandler:
 
         with self._processing_lock:
             message_id = parsed_message.message_id
-
             if (
                 message_id is not None
-                and message_id
-                in self._processed_message_ids
+                and message_id in self._processed_message_ids
             ):
                 return None
 
-            response = self._orchestrator.handle(
-                parsed_message
-            )
+            response = self._orchestrator.handle(parsed_message)
 
-            if (
-                self._sender is not None
-                and response is not None
-            ):
-                self._sender.send_text(
-                    recipient=parsed_message.user_id,
-                    text=str(response),
-                    phone_number_id=(
-                        parsed_message.phone_number_id
-                    ),
-                )
+            if self._sender is not None and response is not None:
+                if isinstance(response, WhatsAppButtonReply):
+                    send_buttons = getattr(self._sender, "send_buttons", None)
+                    if callable(send_buttons):
+                        send_buttons(
+                            recipient=parsed_message.user_id,
+                            reply=response,
+                            phone_number_id=parsed_message.phone_number_id,
+                        )
+                    else:
+                        self._sender.send_text(
+                            recipient=parsed_message.user_id,
+                            text=response.fallback_text,
+                            phone_number_id=parsed_message.phone_number_id,
+                        )
+                else:
+                    self._sender.send_text(
+                        recipient=parsed_message.user_id,
+                        text=str(response),
+                        phone_number_id=parsed_message.phone_number_id,
+                    )
 
             if message_id is not None:
-                self._remember_processed_message_id(
-                    message_id
-                )
+                self._remember_processed_message_id(message_id)
 
             return response
 

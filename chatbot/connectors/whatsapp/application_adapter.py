@@ -5,8 +5,100 @@ from typing import Protocol
 
 from chatbot.connectors.whatsapp.message_handler import (
     IncomingWhatsAppMessage,
+    WhatsAppButtonReply,
 )
+from chatbot.capabilities.greeting import GreetingCapability
+from chatbot.language import Language
 from chatbot.responses import Response
+
+
+_MENU_BUTTONS = {
+    Language.ES: {
+        "services": ("ff_menu_prices_es", "Ver precios"),
+        "booking": ("ff_menu_booking_es", "Reservar cita"),
+        "human_transfer": ("ff_menu_human_es", "Hablar con alguien"),
+    },
+    Language.EN: {
+        "services": ("ff_menu_prices_en", "View prices"),
+        "booking": ("ff_menu_booking_en", "Book appointment"),
+        "human_transfer": ("ff_menu_human_en", "Talk to someone"),
+    },
+}
+
+
+def _format_tenant_reply(
+    application: FlowForgeApplicationProtocol,
+    session_id: str,
+    response: Response,
+) -> str | WhatsAppButtonReply:
+    metadata = getattr(response, "metadata", None)
+    if not isinstance(metadata, dict):
+        return response.text
+
+    activated = metadata.get("activation_succeeded") is True
+    if not activated and metadata.get("capability") != "greeting":
+        return response.text
+
+    store = getattr(application, "conversation_store", None)
+    if store is None:
+        return response.text
+
+    context = store.get(session_id)
+    knowledge = getattr(context, "knowledge_service", None)
+    if knowledge is None:
+        return response.text
+
+    try:
+        greetings = knowledge.get_section("greetings", {})
+    except FileNotFoundError:
+        return response.text
+
+    if not isinstance(greetings, dict):
+        return response.text
+
+    menu = greetings.get("menu")
+    if not isinstance(menu, dict) or menu.get("enabled") is not True:
+        return response.text
+
+    items = menu.get("items")
+    if not isinstance(items, dict):
+        return response.text
+
+    language = (
+        Language.EN if metadata.get("language") == "en" else Language.ES
+    )
+    buttons = tuple(
+        button
+        for key, button in _MENU_BUTTONS[language].items()
+        if items.get(key) is True
+    )
+
+    suffix = GreetingCapability._append_guided_menu(
+        response_text="",
+        greetings=greetings,
+        language=language,
+    )
+
+    if not buttons:
+        return response.text + suffix if activated else response.text
+
+    body = response.text if activated else response.text.removesuffix(suffix)
+    if items.get("faq") is True:
+        body += (
+            "\n\nYou can also type your question."
+            if language is Language.EN
+            else "\n\nTambi\u00e9n puedes escribir tu pregunta."
+        )
+
+    fallback = response.text + suffix if activated else response.text
+    if len(body) > 1024:
+        return fallback
+
+    return WhatsAppButtonReply(
+        text=body,
+        buttons=buttons,
+        fallback_text=fallback,
+    )
 
 
 class FlowForgeApplicationProtocol(Protocol):
@@ -87,7 +179,7 @@ class TenantFlowForgeWhatsAppAdapter:
     def handle(
         self,
         message: IncomingWhatsAppMessage,
-    ) -> str | None:
+    ) -> str | WhatsAppButtonReply | None:
         client_id = self._tenant_router.resolve_client_id(
             message
         )
@@ -109,4 +201,8 @@ class TenantFlowForgeWhatsAppAdapter:
             message=message.text,
         )
 
-        return response.text
+        return _format_tenant_reply(
+            application=application,
+            session_id=message.user_id,
+            response=response,
+        )

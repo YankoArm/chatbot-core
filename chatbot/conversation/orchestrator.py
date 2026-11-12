@@ -118,6 +118,26 @@ class ConversationOrchestrator:
         if active_response is not None:
             return active_response
 
+        if self.capability_manager.get("booking") is None and (
+            self._normalize_control_text(normalized_message)
+            in {"reservar", "book"}
+            or self._is_explicit_booking_request(normalized_message)
+        ):
+            language = context.language or self.default_language
+            if language is Language.EN:
+                text = "Online booking is currently unavailable."
+                if self.capability_manager.get("human_transfer") is not None:
+                    text += ' Type "speak to a person" for help.'
+            else:
+                text = "La agenda en l\u00ednea no est\u00e1 disponible ahora mismo."
+                if self.capability_manager.get("human_transfer") is not None:
+                    text += ' Escribe "hablar con una persona" para pedir ayuda.'
+
+            return Response(
+                text=text,
+                metadata={"handled": True, "booking_unavailable": True},
+            )
+
         delegated_response = self._delegate_message(
             context=context,
             message=normalized_message,

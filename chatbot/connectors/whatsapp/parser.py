@@ -5,6 +5,16 @@ from chatbot.connectors.whatsapp.message_handler import (
 )
 
 
+_GUIDED_MENU_ACTIONS = {
+    "ff_menu_prices_es": "precios",
+    "ff_menu_booking_es": "quiero reservar",
+    "ff_menu_human_es": "quiero hablar con una persona",
+    "ff_menu_prices_en": "prices",
+    "ff_menu_booking_en": "I want to book an appointment",
+    "ff_menu_human_en": "I want to speak to a person",
+}
+
+
 class WhatsAppPayloadError(Exception):
     pass
 
@@ -14,21 +24,35 @@ class WhatsAppPayloadParser:
         self,
         payload: dict[str, object],
     ) -> IncomingWhatsAppMessage | None:
-        value = self._extract_value(
-            payload
-        )
-        message = self._extract_message(
-            value
-        )
+        value = self._extract_value(payload)
+        message = self._extract_message(value)
 
         if message is None:
             return None
 
-        phone_number_id = (
-            self._extract_phone_number_id(
-                value
-            )
-        )
+        phone_number_id = self._extract_phone_number_id(value)
+
+        if message.get("type") == "interactive":
+            interactive = message.get("interactive")
+            if (
+                not isinstance(interactive, dict)
+                or interactive.get("type") != "button_reply"
+            ):
+                return None
+
+            reply = interactive.get("button_reply")
+            if not isinstance(reply, dict):
+                return None
+
+            button_id = reply.get("id")
+            if not isinstance(button_id, str):
+                return None
+
+            action = _GUIDED_MENU_ACTIONS.get(button_id)
+            if action is None:
+                return None
+
+            message = {**message, "text": {"body": action}}
 
         return self._extract_text_message(
             message,

@@ -82,6 +82,18 @@ class FlowForgeApplication:
         )
 
         if activation_response is not None:
+            if activation_response.text and context.activation_state.active:
+                from dataclasses import replace
+
+                language = context.language or self._get_default_language()
+                return replace(
+                    activation_response,
+                    metadata={
+                        **activation_response.metadata,
+                        "activation_succeeded": True,
+                        "language": getattr(language, "value", language),
+                    },
+                )
             return activation_response
 
         self._ensure_conversation_language(

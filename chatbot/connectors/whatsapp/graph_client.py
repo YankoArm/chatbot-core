@@ -115,24 +115,66 @@ class WhatsAppGraphClient:
         to: str,
         text: str,
     ) -> WhatsAppMessageResponse:
+        return self._send_message(
+            to=to,
+            content={
+                "type": "text",
+                "text": {"body": text},
+            },
+        )
+
+    def send_reply_buttons(
+        self,
+        *,
+        to: str,
+        text: str,
+        buttons: tuple[tuple[str, str], ...],
+    ) -> WhatsAppMessageResponse:
+        if not 1 <= len(buttons) <= 3:
+            raise ValueError("WhatsApp requires one to three reply buttons.")
+
+        return self._send_message(
+            to=to,
+            content={
+                "type": "interactive",
+                "interactive": {
+                    "type": "button",
+                    "body": {"text": text},
+                    "action": {
+                        "buttons": [
+                            {
+                                "type": "reply",
+                                "reply": {
+                                    "id": button_id,
+                                    "title": title,
+                                },
+                            }
+                            for button_id, title in buttons
+                        ],
+                    },
+                },
+            },
+        )
+
+    def _send_message(
+        self,
+        *,
+        to: str,
+        content: dict[str, object],
+    ) -> WhatsAppMessageResponse:
         response = self._http_client.post(
             url=(
                 "https://graph.facebook.com/v23.0/"
                 f"{self._phone_number_id}/messages"
             ),
             headers={
-                "Authorization": (
-                    f"Bearer {self._access_token}"
-                ),
+                "Authorization": f"Bearer {self._access_token}",
                 "Content-Type": "application/json",
             },
             json={
                 "messaging_product": "whatsapp",
                 "to": to,
-                "type": "text",
-                "text": {
-                    "body": text,
-                },
+                **content,
             },
         )
 
@@ -151,9 +193,9 @@ class WhatsAppGraphClient:
                 "an invalid message id"
             )
 
-        return WhatsAppMessageResponse(
-            message_id=message_id,
-        )
+        return WhatsAppMessageResponse(message_id=message_id)
+
+
 from collections.abc import Callable
 from threading import RLock
 
