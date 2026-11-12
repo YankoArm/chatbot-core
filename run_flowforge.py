@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import replace
 
 import uvicorn
@@ -604,6 +605,7 @@ def create_production_app(
     )
 
     return create_app(
+        enable_web_chat=os.getenv("FLOWFORGE_ENABLE_WEB_CHAT") == "1",
         config=config,
         calendar_service=calendar_service,
         calendar_service_factory=calendar_service_factory,

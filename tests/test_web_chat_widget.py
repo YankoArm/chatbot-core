@@ -11,7 +11,7 @@ from chatbot.clients.registry import build_client_definition
 WIDGET = "wf_visual_test_123456"
 
 
-def make_client(name="Empresa de prueba", enabled=True):
+def make_client(name="Empresa de prueba", enabled=True, allowed_origins=None):
     original = build_client_definition("tarot_alvin")
 
     definition = replace(
@@ -22,6 +22,9 @@ def make_client(name="Empresa de prueba", enabled=True):
             "web_chat": {
                 "enabled": enabled,
                 "widget_id": WIDGET,
+                "allowed_origins": (
+                    [] if allowed_origins is None else allowed_origins
+                ),
             },
         },
         metadata={
@@ -70,6 +73,30 @@ def test_widget_page_is_available():
     assert "Empresa de prueba" in response.text
     assert "/webchat/api/" in response.text
     assert WIDGET in response.text
+
+
+
+def test_widget_restricts_embedding_to_configured_origins():
+    client = make_client(allowed_origins=["https://easyappcode.com"])
+    response = client.get(f"/webchat/widget/{WIDGET}")
+
+    assert response.status_code == 200
+    assert response.headers["content-security-policy"] == (
+        "frame-ancestors https://easyappcode.com"
+    )
+
+
+def test_widget_without_origins_allows_same_origin_embedding():
+    response = make_client().get(f"/webchat/widget/{WIDGET}")
+
+    assert response.headers["content-security-policy"] == "frame-ancestors 'self'"
+
+
+def test_widget_rejects_invalid_origins_in_embedding_policy():
+    client = make_client(allowed_origins=["https://example.com;frame-src *"])
+    response = client.get(f"/webchat/widget/{WIDGET}")
+
+    assert response.headers["content-security-policy"] == "frame-ancestors 'none'"
 
 
 def test_widget_escapes_business_name():

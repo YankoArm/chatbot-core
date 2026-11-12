@@ -587,3 +587,52 @@ def test_create_app_uses_provided_lead_repository() -> None:
     assert app.state.lead_repository is lead_repository
 
     lead_repository.close()
+
+
+def test_production_mounts_web_chat_only_when_enabled(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from fastapi.testclient import TestClient
+
+    import run_flowforge
+    from chatbot.instances.sqlite_repository import (
+        SQLiteInstanceDefinitionRepository,
+    )
+
+    config = SimpleNamespace(
+        client_id="tarot_alvin",
+        whatsapp=SimpleNamespace(
+            access_token="test-access-token",
+            phone_number_id="123456789",
+            verify_token="test-verify-token",
+            app_secret="test-app-secret",
+        ),
+        admin_password="test-admin-password",
+        admin_session_secret="test-admin-session-secret",
+        admin_session_secure=False,
+    )
+
+    def unavailable_calendar():
+        raise FileNotFoundError("Calendar disabled in this test")
+
+    monkeypatch.setattr(
+        run_flowforge, "build_calendar_service_factory", unavailable_calendar
+    )
+    monkeypatch.setattr(run_flowforge, "build_lead_repository", lambda _: None)
+    monkeypatch.setattr(
+        run_flowforge,
+        "build_admin_repository",
+        lambda _: SQLiteInstanceDefinitionRepository(
+            database_path=tmp_path / "admin.sqlite3",
+        ),
+    )
+
+    monkeypatch.delenv("FLOWFORGE_ENABLE_WEB_CHAT", raising=False)
+    with TestClient(run_flowforge.create_production_app(config=config)) as client:
+        assert client.get("/webchat/embed.js").status_code == 404
+
+    monkeypatch.setenv("FLOWFORGE_ENABLE_WEB_CHAT", "1")
+    with TestClient(run_flowforge.create_production_app(config=config)) as client:
+        response = client.get("/webchat/embed.js")
+        assert response.status_code == 200
+        assert "javascript" in response.headers["content-type"]

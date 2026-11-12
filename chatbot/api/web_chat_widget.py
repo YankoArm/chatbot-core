@@ -343,6 +343,33 @@ addMessage("\u00A1Hola! \u00BFEn qu\u00E9 puedo ayudarte?", "bot");
 """
 
 
+def _frame_ancestors(web: dict[str, Any]) -> str:
+    origins = web.get("allowed_origins", [])
+    if not isinstance(origins, list):
+        return "'none'"
+
+    if not origins:
+        return "'self'"
+
+    if any(
+        not isinstance(origin, str)
+        or not origin
+        or not origin.isascii()
+        or any(character.isspace() for character in origin)
+        for origin in origins
+    ):
+        return "'none'"
+
+    from chatbot.api.admin_web_chat import normalize_origins
+
+    try:
+        normalized = normalize_origins("\n".join(origins))
+    except ValueError:
+        return "'none'"
+
+    return " ".join(normalized) or "'none'"
+
+
 def build_web_chat_widget_router(
     *,
     resolve_widget: Callable[[str], Any],
@@ -404,6 +431,9 @@ def build_web_chat_widget_router(
                 "Cache-Control": "no-store",
                 "X-Content-Type-Options": "nosniff",
                 "Referrer-Policy": "no-referrer",
+                "Content-Security-Policy": (
+                    f"frame-ancestors {_frame_ancestors(web)}"
+                ),
             },
         )
 
