@@ -126,7 +126,7 @@ chmod a+x "$STATE_DIR" "$STATE_DIR/releases" "$RELEASE_DIR"
 (
     # Runtime dependencies need to be readable by the service user.
     umask 022
-    "$APP_DIR/.venv/bin/python" -m venv "$RELEASE_DIR/venv"
+    "$APP_DIR/.venv/bin/python" -m venv "$RELEASE_DIR/venv" --copies
     cd "$SOURCE_DIR"
     "$RELEASE_DIR/venv/bin/python" -m pip install \
         --disable-pip-version-check -r requirements.txt
