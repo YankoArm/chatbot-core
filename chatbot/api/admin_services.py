@@ -108,6 +108,128 @@ def _build_unique_service_id(
     return candidate
 
 
+
+def _validate_service_details(values: dict[str, str]) -> str | None:
+    service_type = values["service_type"]
+    billing_period = values["billing_period"]
+
+    if service_type not in {"appointment", "project", "recurring"}:
+        return "El tipo de servicio no es v?lido."
+
+    if billing_period not in {"once", "week", "month", "quarter", "year"}:
+        return "La periodicidad del precio no es v?lida."
+
+    if service_type == "recurring" and billing_period == "once":
+        return "Selecciona una periodicidad para el servicio recurrente."
+
+    if service_type != "recurring" and billing_period != "once":
+        return "La periodicidad solo se aplica a servicios recurrentes."
+
+    if len(values["duration_text"]) > 200:
+        return "El plazo no puede superar los 200 caracteres."
+
+    return None
+
+
+
+def _render_service_details_fields(values: dict[str, str]) -> str:
+    service_type = values.get("service_type") or "appointment"
+    billing_period = values.get("billing_period") or "once"
+
+    def options(items, selected):
+        return "".join(
+            f'<option value="{escape(value, quote=True)}"'
+            f'{" selected" if value == selected else ""}>'
+            f'{escape(label)}</option>'
+            for value, label in items
+        )
+
+    type_options = options(
+        (
+            ("appointment", "Cita reservable"),
+            ("project", "Proyecto o trabajo por encargo"),
+            ("recurring", "Servicio recurrente"),
+        ),
+        service_type,
+    )
+    period_options = options(
+        (
+            ("once", "Pago \u00fanico"),
+            ("week", "Semanal"),
+            ("month", "Mensual"),
+            ("quarter", "Trimestral"),
+            ("year", "Anual"),
+        ),
+        billing_period,
+    )
+    duration_text = escape(
+        values.get("duration_text", ""),
+        quote=True,
+    )
+
+    fields = f"""
+        <label>
+            <span>Tipo de servicio</span>
+            <select name="service_type" required>
+                {type_options}
+            </select>
+        </label>
+        <label>
+            <span>Plazo o duraci&#243;n descriptiva</span>
+            <input
+                name="duration_text"
+                value="{duration_text}"
+                maxlength="200"
+                placeholder="Entre 5 y 10 d&#237;as, o a consultar"
+            >
+        </label>
+        <label>
+            <span>Periodicidad del precio</span>
+            <select name="billing_period" required>
+                {period_options}
+            </select>
+        </label>
+        <p>
+            Las citas se reservan en el calendario.
+            Los proyectos y servicios recurrentes no reservan
+            una franja de minutos.
+            La periodicidad indica cada cu&#225;nto se cobra;
+            el plazo describe la entrega o duraci&#243;n del servicio.
+        </p>
+    """
+
+    script = """
+        <script>
+        (() => {
+            const form = document.currentScript.closest("form");
+            const type = form.elements.namedItem("service_type");
+            const minutes = form.elements.namedItem("duration_minutes");
+            const period = form.elements.namedItem("billing_period");
+
+            function updateFields() {
+                const appointment = type.value === "appointment";
+                const recurring = type.value === "recurring";
+
+                minutes.required = appointment;
+                minutes.disabled = !appointment;
+                minutes.closest("label").hidden = !appointment;
+
+                period.disabled = !recurring;
+                period.closest("label").hidden = !recurring;
+
+                if (recurring && period.value === "once") {
+                    period.value = "month";
+                }
+            }
+
+            type.addEventListener("change", updateFields);
+            updateFields();
+        })();
+        </script>
+    """
+    return fields + script
+
+
 def build_admin_services_router(
     *,
     instance_definition_repository: (
@@ -250,9 +372,10 @@ def build_admin_services_router(
                         type="number"
                         min="1"
                         max="1440"
-                        required
                     >
                 </label>
+
+                {_render_service_details_fields(form_values)}
 
                 <label>
                     <span>Tipo de precio</span>
@@ -417,6 +540,9 @@ def build_admin_services_router(
                 "name_es",
                 "name_en",
                 "duration_minutes",
+                "service_type",
+                "duration_text",
+                "billing_period",
                 "price_type",
                 "price_amount",
                 "currency",
@@ -430,8 +556,11 @@ def build_admin_services_router(
             )
         )
 
-        error: str | None = None
-        duration_minutes = 0
+        values["service_type"] = values["service_type"] or "appointment"
+        values["billing_period"] = values["billing_period"] or "once"
+
+        error: str | None = _validate_service_details(values)
+        duration_minutes = None
         amount_cents = 0
 
         if not re.fullmatch(
@@ -445,7 +574,7 @@ def build_admin_services_router(
             error = (
                 "El nombre en español es obligatorio."
             )
-        else:
+        elif values["service_type"] == "appointment":
             try:
                 duration_minutes = int(
                     values["duration_minutes"]
@@ -457,6 +586,7 @@ def build_admin_services_router(
 
         if (
             error is None
+            and values["service_type"] == "appointment"
             and not 1 <= duration_minutes <= 1440
         ):
             error = (
@@ -552,10 +682,30 @@ def build_admin_services_router(
             "id": values["service_id"],
             "name": names,
             "duration_minutes": duration_minutes,
+            **(
+                {
+                    "service_type": values["service_type"],
+                    "duration_text": values["duration_text"],
+                }
+                if values["service_type"] != "appointment"
+                else (
+                    {"duration_text": values["duration_text"]}
+                    if values["duration_text"]
+                    else {}
+                )
+            ),
             "price": {
                 "type": values["price_type"],
                 "amount_cents": amount_cents,
                 "currency": values["currency"],
+                **(
+                    {"billing_period": values["billing_period"]}
+                    if (
+                        values["service_type"] != "appointment"
+                        or values["billing_period"] != "once"
+                    )
+                    else {}
+                ),
             },
         }
 
@@ -616,6 +766,15 @@ def build_admin_services_router(
                     "duration_minutes",
                     "",
                 )
+            ),
+            "service_type": str(
+                service.get("service_type", "appointment")
+            ),
+            "duration_text": str(
+                service.get("duration_text") or ""
+            ),
+            "billing_period": str(
+                price.get("billing_period", "once")
             ),
             "price_type": str(
                 price.get(
@@ -723,9 +882,10 @@ def build_admin_services_router(
                         type="number"
                         min="1"
                         max="1440"
-                        required
                     >
                 </label>
+
+                {_render_service_details_fields(form_values)}
 
                 <label>
                     <span>Tipo de precio</span>
@@ -908,21 +1068,27 @@ def build_admin_services_router(
                 "name_es",
                 "name_en",
                 "duration_minutes",
+                "service_type",
+                "duration_text",
+                "billing_period",
                 "price_type",
                 "price_amount",
                 "currency",
             )
         }
 
-        error: str | None = None
-        duration_minutes = 0
+        values["service_type"] = values["service_type"] or "appointment"
+        values["billing_period"] = values["billing_period"] or "once"
+
+        error: str | None = _validate_service_details(values)
+        duration_minutes = None
         amount_cents = 0
 
         if not values["name_es"]:
             error = (
                 "El nombre en español es obligatorio."
             )
-        else:
+        elif values["service_type"] == "appointment":
             try:
                 duration_minutes = int(
                     values["duration_minutes"]
@@ -934,6 +1100,7 @@ def build_admin_services_router(
 
         if (
             error is None
+            and values["service_type"] == "appointment"
             and not 1 <= duration_minutes <= 1440
         ):
             error = (
@@ -1004,10 +1171,30 @@ def build_admin_services_router(
             "id": service_id,
             "name": names,
             "duration_minutes": duration_minutes,
+            **(
+                {
+                    "service_type": values["service_type"],
+                    "duration_text": values["duration_text"],
+                }
+                if values["service_type"] != "appointment"
+                else (
+                    {"duration_text": values["duration_text"]}
+                    if values["duration_text"]
+                    else {}
+                )
+            ),
             "price": {
                 "type": values["price_type"],
                 "amount_cents": amount_cents,
                 "currency": values["currency"],
+                **(
+                    {"billing_period": values["billing_period"]}
+                    if (
+                        values["service_type"] != "appointment"
+                        or values["billing_period"] != "once"
+                    )
+                    else {}
+                ),
             },
         }
 
@@ -1197,75 +1384,58 @@ def render_service_card(
     client_id: str,
     service: dict,
 ) -> str:
-    names = service.get(
-        "name",
-        {},
-    )
+    names = service.get("name", {})
     visible_name = (
         names.get("es")
         or names.get("en")
         or service.get("id", "Servicio")
     )
+    service_id = str(service.get("id", ""))
+    service_type = service.get("service_type", "appointment")
+    duration_text = str(service.get("duration_text") or "").strip()
 
-    service_id = str(
-        service.get(
-            "id",
-            "",
-        )
-    )
-    duration_minutes = service.get(
-        "duration_minutes",
-        0,
-    )
-    price = service.get(
-        "price",
-        {},
-    )
-    amount_cents = price.get(
-        "amount_cents",
-        0,
-    )
-    price_type = price.get(
-        "type",
-        "fixed",
-    )
+    type_label = {
+        "appointment": "Cita reservable",
+        "project": "Proyecto",
+        "recurring": "Servicio recurrente",
+    }.get(service_type, "Servicio")
 
-    formatted_amount = (
-        f"{amount_cents / 100:.2f}"
-        .replace(
-            ".",
-            ",",
-        )
-    )
-    price_prefix = (
-        "Desde "
-        if price_type == "from"
-        else ""
+    if service_type == "appointment":
+        duration_label = f'{service.get("duration_minutes", 0)} minutos'
+    else:
+        duration_label = duration_text or "Plazo a consultar"
+
+    price = service.get("price", {})
+    amount_cents = price.get("amount_cents", 0)
+    formatted_amount = f"{amount_cents / 100:.2f}".replace(".", ",")
+    price_prefix = "Desde " if price.get("type") == "from" else ""
+    period_suffix = {
+        "once": "",
+        "week": " / semana",
+        "month": " / mes",
+        "quarter": " / trimestre",
+        "year": " / a\u00f1o",
+    }.get(price.get("billing_period", "once"), "")
+
+    currency = str(price.get("currency", "EUR"))
+    currency_label = "\u20ac" if currency == "EUR" else currency
+    price_label = (
+        f"{price_prefix}{formatted_amount} "
+        f"{currency_label}{period_suffix}"
     )
 
-    escaped_client_id = escape(
-        client_id,
-        quote=True,
-    )
-    escaped_service_id = escape(
-        service_id,
-        quote=True,
-    )
+    escaped_client_id = escape(client_id, quote=True)
+    escaped_service_id = escape(service_id, quote=True)
 
     return f"""
     <article class="card">
         <span class="status">Servicio activo</span>
         <h2>{escape(str(visible_name))}</h2>
-        <span class="identifier">
-            {escape(service_id)}
-        </span>
+        <span class="identifier">{escape(service_id)}</span>
         <div class="tags">
-            <span class="tag">
-                {escape(str(duration_minutes))} minutos
-            </span>
-            <span class="tag">
-                {price_prefix}{formatted_amount} €
-            </span>
+            <span class="tag">{escape(type_label)}</span>
+            <span class="tag">{escape(duration_label)}</span>
+            <span class="tag">{escape(price_label)}</span>
         </div>
         <div class="actions">
             <a

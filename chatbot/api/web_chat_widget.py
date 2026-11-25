@@ -295,48 +295,111 @@ async function request(path, body) {
   return response.json();
 }
 
-form.addEventListener("submit", async event => {
-  event.preventDefault();
 
-  const message = input.value.trim();
+let menuButtons = [];
+
+function renderMenu() {
+  messages.querySelectorAll(".menu-options").forEach(node => node.remove());
+  if (!menuButtons.length) return;
+
+  const menu = document.createElement("div");
+  menu.className = "menu-options";
+  menu.setAttribute("role", "group");
+  menu.setAttribute("aria-label", "Opciones del asistente");
+  menu.style.cssText = "display:flex;flex-direction:column;gap:8px;margin:10px 0;";
+
+  for (const option of menuButtons) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = option.label;
+    button.disabled = busy;
+    button.style.cssText =
+      "padding:10px 14px;border:1px solid #2563eb;border-radius:10px;" +
+      "background:white;color:#1d4ed8;cursor:pointer;font:inherit;";
+    button.addEventListener("click", () => submitMessage(option.message));
+    menu.appendChild(button);
+  }
+
+  messages.appendChild(menu);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+async function ensureSession() {
+  if (sessionToken) return;
+
+  const started = await request("/session", {});
+  sessionToken = started.session_token;
+  menuButtons = Array.isArray(started.buttons) ? started.buttons : [];
+}
+
+async function submitMessage(message) {
+  message = message.trim();
   if (!message || busy) return;
 
+  setBusy(true);
+  messages.querySelectorAll(".menu-options").forEach(node => node.remove());
   addMessage(message, "user");
   input.value = "";
-  setBusy(true);
 
   try {
-    if (!sessionToken) {
-      const started = await request("/session", {});
-      sessionToken = started.session_token;
-    }
+    await ensureSession();
 
     const answer = await request("/message", {
       session_token: sessionToken,
       message: message
     });
 
+    menuButtons = Array.isArray(answer.buttons) ? answer.buttons : [];
     addMessage(answer.response, "bot");
   } catch (error) {
+    if (!sessionToken) menuButtons = [];
     addMessage(
-      "No se pudo enviar el mensaje. Int?ntalo de nuevo.",
+      "No se pudo enviar el mensaje. Int\u00e9ntalo de nuevo.",
       "error"
     );
   } finally {
     setBusy(false);
+    renderMenu();
     input.focus();
   }
+}
+
+async function initializeMenu() {
+  setBusy(true);
+
+  try {
+    await ensureSession();
+  } catch (error) {
+    menuButtons = [];
+    addMessage(
+      "No se pudo cargar el chat. Pulsa Nueva conversaci\u00f3n para reintentar.",
+      "error"
+    );
+  } finally {
+    setBusy(false);
+    renderMenu();
+  }
+}
+
+form.addEventListener("submit", event => {
+  event.preventDefault();
+  submitMessage(input.value);
 });
 
 document.getElementById("reset").addEventListener("click", () => {
   if (busy) return;
+
   sessionToken = null;
+  menuButtons = [];
   messages.replaceChildren();
   addMessage("Nueva conversaci\u00F3n. \u00BFEn qu\u00E9 puedo ayudarte?", "bot");
+  initializeMenu();
   input.focus();
 });
 
 addMessage("\u00A1Hola! \u00BFEn qu\u00E9 puedo ayudarte?", "bot");
+initializeMenu();
+
 </script>
 </body>
 </html>

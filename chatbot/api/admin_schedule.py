@@ -15,6 +15,11 @@ from fastapi.responses import (
     RedirectResponse,
 )
 
+from chatbot.api.admin_availability import (
+    availability_form_values,
+    build_availability_settings,
+    render_availability_fields,
+)
 from chatbot.instances import InstanceDefinition
 
 
@@ -99,6 +104,7 @@ def build_admin_schedule_router(
             method="post"
             action="/admin/clients/{escape(definition.id)}/schedule"
         >
+            {render_availability_fields(values)}
             <section class="form-section">
                 <h2>Zona horaria</h2>
                 <label>
@@ -275,6 +281,11 @@ def build_admin_schedule_router(
         }
 
         try:
+            availability_settings = (
+                build_availability_settings(values)
+                if values.get("availability_configured") == "1"
+                else None
+            )
             booking_settings = (
                 _build_booking_settings(
                     values
@@ -300,6 +311,15 @@ def build_admin_schedule_router(
         updated_settings = deepcopy(
             definition.settings
         )
+        if availability_settings is not None:
+            current_availability = updated_settings.get("availability", {})
+            if not isinstance(current_availability, dict):
+                current_availability = {}
+            updated_settings["availability"] = {
+                **current_availability,
+                **availability_settings,
+            }
+
         updated_settings["booking"] = (
             booking_settings
         )
@@ -418,6 +438,7 @@ def _definition_form_values(
                 time_range[1]
             )
 
+    values.update(availability_form_values(definition.settings))
     return values
 
 

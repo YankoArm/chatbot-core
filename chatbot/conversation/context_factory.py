@@ -68,4 +68,9 @@ class ConversationContextFactory:
         if isinstance(services, list):
             context.variables["services"] = services
 
+        availability = instance.settings.get("availability")
+        if isinstance(availability, dict):
+            from copy import deepcopy
+            context.variables["availability"] = deepcopy(availability)
+
         return context

@@ -8,6 +8,9 @@ from chatbot.capabilities.base_capability import BaseCapability
 from chatbot.capabilities.faq.catalog import (
     build_service_catalog_answer,
 )
+from chatbot.capabilities.faq.availability import (
+    build_availability_answer,
+)
 from chatbot.language import Language
 from chatbot.responses import Response
 
@@ -150,7 +153,17 @@ class FAQCapability(BaseCapability):
             language=language,
         )
 
-        answer = configured_answer
+        availability_answer = build_availability_answer(
+            availability=(
+                variables.get("availability")
+                if isinstance(variables, dict)
+                else None
+            ),
+            message=message,
+            language=language,
+        )
+
+        answer = availability_answer or configured_answer
 
         if (
             answer is None

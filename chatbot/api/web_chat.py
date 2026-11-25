@@ -32,6 +32,117 @@ class WebChatSession:
     message_times: deque = field(default_factory=deque)
 
 
+
+def _build_initial_menu_buttons(definition: Any) -> list[dict[str, str]]:
+    settings = getattr(definition, "settings", {})
+    if not isinstance(settings, dict):
+        return []
+
+    knowledge = settings.get("knowledge", {})
+    if not isinstance(knowledge, dict):
+        return []
+
+    greetings = knowledge.get("greetings", {})
+    if not isinstance(greetings, dict):
+        return []
+
+    menu = greetings.get("menu", {})
+    if not isinstance(menu, dict) or menu.get("enabled") is not True:
+        return []
+
+    items = menu.get("items", {})
+    if not isinstance(items, dict):
+        return []
+
+    choices = (
+        ("services", "Servicios y precios", "Ver servicios y precios"),
+        ("booking", "Reservar cita", "Quiero reservar una cita"),
+        ("faq", "Preguntas frecuentes", "ayuda"),
+        (
+            "human_transfer",
+            "Hablar con alguien",
+            "Quiero hablar con una persona",
+        ),
+    )
+
+    return [
+        {"id": key, "label": label, "message": message}
+        for key, label, message in choices
+        if items.get(key) is True
+    ]
+
+
+
+def _build_reply_menu_buttons(
+    definition: Any,
+    result: Any,
+) -> list[dict[str, str]]:
+    metadata = getattr(result, "metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+
+    if metadata.get("capability") == "lead_capture":
+        finished = any(
+            metadata.get(key) is True
+            for key in (
+                "lead_captured",
+                "lead_capture_cancelled",
+                "lead_capture_follow_up",
+            )
+        )
+        if not finished:
+            return []
+
+    terminal_steps = {"complete", "completed", "cancelled", "canceled"}
+
+    for key in ("booking_step", "booking_management_step"):
+        if key not in metadata:
+            continue
+        step = metadata[key]
+        if not isinstance(step, str):
+            return []
+        if step.casefold() not in terminal_steps:
+            return []
+
+    return _build_initial_menu_buttons(definition)
+
+
+
+def _format_web_chat_reply_text(definition: Any, result: Any) -> str:
+    from chatbot.capabilities.greeting import GreetingCapability
+    from chatbot.language import Language
+
+    metadata = getattr(result, "metadata", {})
+    if not isinstance(metadata, dict):
+        return result.text
+
+    if (
+        metadata.get("capability") != "greeting"
+        and metadata.get("activation_succeeded") is not True
+    ):
+        return result.text
+
+    if not _build_initial_menu_buttons(definition):
+        return result.text
+
+    greetings = definition.settings["knowledge"]["greetings"]
+    language = (
+        Language.EN
+        if metadata.get("language") == "en"
+        else Language.ES
+    )
+    suffix = GreetingCapability._append_guided_menu(
+        response_text="",
+        greetings=greetings,
+        language=language,
+    )
+
+    if suffix and result.text.endswith(suffix):
+        return result.text.removesuffix(suffix)
+
+    return result.text
+
+
 def build_web_chat_router(
     *,
     resolve_widget: Callable[[str], Any],
@@ -148,6 +259,7 @@ def build_web_chat_router(
         return {
             "session_token": token,
             "expires_in_seconds": SESSION_TTL,
+            "buttons": _build_initial_menu_buttons(definition),
         }
 
     @router.post("/{widget_id}/message")
@@ -155,7 +267,7 @@ def build_web_chat_router(
         widget_id: str,
         payload: WebChatMessage,
         response: Response,
-    ) -> dict[str, str]:
+    ) -> dict[str, object]:
         definition = get_definition(widget_id)
         now = time.monotonic()
 
@@ -201,6 +313,11 @@ def build_web_chat_router(
 
         response.headers["Cache-Control"] = "no-store"
 
-        return {"response": result.text}
+        reply = {
+            "response": _format_web_chat_reply_text(definition, result),
+        }
+        if _build_initial_menu_buttons(definition):
+            reply["buttons"] = _build_reply_menu_buttons(definition, result)
+        return reply
 
     return router

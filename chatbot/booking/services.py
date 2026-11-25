@@ -23,9 +23,11 @@ def build_bookable_services(
     value: Any,
 ) -> tuple[BookableService, ...]:
     """
-    Build and validate bookable services from instance settings.
-    """
+    Validate service entries and return only bookable appointments.
 
+    Existing services without service_type remain appointments.
+    Projects and recurring services do not require booking durations.
+    """
     if value is None:
         return ()
 
@@ -38,6 +40,8 @@ def build_bookable_services(
     registered_ids: set[str] = set()
 
     for index, raw_service in enumerate(value):
+        prefix = f"services[{index}]"
+
         if not isinstance(raw_service, dict):
             raise ValueError(
                 "Each instance service must be a dictionary."
@@ -46,7 +50,7 @@ def build_bookable_services(
         service_id = _require_string(
             raw_service,
             "id",
-            prefix=f"services[{index}]",
+            prefix=prefix,
         )
 
         if service_id in registered_ids:
@@ -55,70 +59,92 @@ def build_bookable_services(
                 f"{service_id!r}."
             )
 
+        registered_ids.add(service_id)
+
+        service_type = raw_service.get(
+            "service_type",
+            "appointment",
+        )
+
+        if (
+            not isinstance(service_type, str)
+            or service_type not in {
+                "appointment",
+                "project",
+                "recurring",
+            }
+        ):
+            raise ValueError(
+                f"{prefix}.service_type must be "
+                "'appointment', 'project' or 'recurring'."
+            )
+
         raw_name = raw_service.get("name")
 
         if not isinstance(raw_name, dict):
             raise ValueError(
-                f"services[{index}].name must be a dictionary."
+                f"{prefix}.name must be a dictionary."
             )
 
         name_es = _require_string(
             raw_name,
             "es",
-            prefix=f"services[{index}].name",
+            prefix=f"{prefix}.name",
         )
-
         name_en = _require_string(
             raw_name,
             "en",
-            prefix=f"services[{index}].name",
+            prefix=f"{prefix}.name",
         )
 
-        duration_minutes = _require_positive_integer(
-            raw_service,
-            "duration_minutes",
-            prefix=f"services[{index}]",
-        )
+        duration_minutes = None
+
+        if service_type == "appointment":
+            duration_minutes = _require_positive_integer(
+                raw_service,
+                "duration_minutes",
+                prefix=prefix,
+            )
 
         raw_price = raw_service.get("price")
 
         if not isinstance(raw_price, dict):
             raise ValueError(
-                f"services[{index}].price must be a dictionary."
+                f"{prefix}.price must be a dictionary."
             )
 
         price_type = _require_string(
             raw_price,
             "type",
-            prefix=f"services[{index}].price",
+            prefix=f"{prefix}.price",
         )
 
-        if price_type not in {
-            "fixed",
-            "from",
-        }:
+        if price_type not in {"fixed", "from"}:
             raise ValueError(
-                f"services[{index}].price.type must be "
+                f"{prefix}.price.type must be "
                 "'fixed' or 'from'."
             )
 
         price_cents = _require_positive_integer(
             raw_price,
             "amount_cents",
-            prefix=f"services[{index}].price",
+            prefix=f"{prefix}.price",
         )
 
         currency = _require_string(
             raw_price,
             "currency",
-            prefix=f"services[{index}].price",
+            prefix=f"{prefix}.price",
         ).upper()
 
         if len(currency) != 3:
             raise ValueError(
-                f"services[{index}].price.currency "
+                f"{prefix}.price.currency "
                 "must contain three letters."
             )
+
+        if service_type != "appointment":
+            continue
 
         services.append(
             BookableService(
@@ -132,10 +158,7 @@ def build_bookable_services(
             )
         )
 
-        registered_ids.add(service_id)
-
     return tuple(services)
-
 
 def _require_string(
     settings: dict[str, Any],
