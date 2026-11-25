@@ -45,3 +45,6 @@ jobs:
 
       - name: Check deployment script syntax
         run: bash -n scripts/update_flowforge.sh
+
+      - name: Test deployment and rollback
+        run: bash tests/test_update_flowforge.sh
